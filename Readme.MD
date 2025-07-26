@@ -68,7 +68,7 @@ After installation, you'll find the XLerate tab in your Excel ribbon:
 ### Formula Tracer
 1. Select a cell with a formula
 2. Click "Trace Precedents" or "Trace Dependents" in the XLerate ribbon (highly recommended to set up quick access shortcuts, see below)
-3. Navigate through dependencies using the `up` and `down` arrow keys to navigate, and the `left` and `right` arrow keys to open deeper levels of dependencies in the interactive dialog box
+3. Navigate through dependencies using the `up` and `down` arrow keys to navigate, and the `right` and `left` arrow keys to open/close deeper levels of dependencies in the interactive dialog box (noted by + and - signs in list)
 4. Drag corners to resize the dialog box in case of many dependencies
 5. To quickly close the dialog window hit `Esc`
 6. Click on the "Settings" button in the ribbon and then on "Formula Tracer" to access the settings dialog box which allows to modify the maximum number of levels to trace
