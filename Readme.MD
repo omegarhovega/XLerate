@@ -7,7 +7,7 @@ XLerate is an open-source Excel add-in for Windows and Mac designed to speed up 
 
 ### Advanced Formula Tracer
 - Trace all precedents and dependents of a cell in a single operation
-- Quick navigation through formula chains
+- Quick multi-level tracing to navigate through formula chains
 
 ### Formula Consistency Checker
 - Instantly identify inconsistencies in adjacent formulas
@@ -41,6 +41,9 @@ XLerate is an open-source Excel add-in for Windows and Mac designed to speed up 
 **Note:** Due to Windows security settings, you might have to unblock the add-in: 
 1. Right-click the `XLerate.xlam` file and select Properties 
 2. On the General tab under Security tick the "Unblock" box
+3. In case of any annoying sounds during usage, disable in Excel's Options:
+   - File → Options → Accessability
+   - Uncheck "Provide feedback with sound"
 
 ### Mac 🍎
 1. Download the latest release (`XLerate.xlam`) from the `dist` folder
@@ -64,9 +67,11 @@ After installation, you'll find the XLerate tab in your Excel ribbon:
 
 ### Formula Tracer
 1. Select a cell with a formula
-2. Click "Trace Precedents" or "Trace Dependents" in the XLerate ribbon
-3. Navigate through dependencies using the arrow keys in the interactive dialog box
-4. To quickly close the dialog window hit `Esc`
+2. Click "Trace Precedents" or "Trace Dependents" in the XLerate ribbon (highly recommended to set up quick access shortcuts, see below)
+3. Navigate through dependencies using the `up` and `down` arrow keys to navigate, and the `left` and `right` arrow keys to open deeper levels of dependencies in the interactive dialog box
+4. Drag corners to resize the dialog box in case of many dependencies
+5. To quickly close the dialog window hit `Esc`
+6. Click on the "Settings" button in the ribbon and then on "Formula Tracer" to access the settings dialog box which allows to modify the maximum number of levels to trace
 
 ### Consistency Checker
 1. With an open sheet click "Horizontal Consistency" in the XLerate ribbon under Auditing   
