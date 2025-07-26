@@ -46,7 +46,6 @@
                         <button id="formatMainBtn"
                                 label="Format"
                                 imageMso="NumberFormat"
-                                onAction="OnFormatMain"
                                 screentip="Format Options"
                                 supertip="Various formatting options"/>
                         <menu id="formatMenu">
@@ -68,6 +67,12 @@
                                     onAction="DoCycleDateFormat"
                                     screentip="Cycle Date Formats"
                                     supertip="Cycle through configured date formats"/>
+                            <button id="cycleTextStyleBtn"
+                                    label="Cycle text styles"
+                                    imageMso="FontsReplaceFonts"
+                                    onAction="DoCycleTextStyle"
+                                    screentip="Cycle Text Styles"
+                                    supertip="Cycle through configured text styles"/>
                         </menu>
                     </splitButton>
                     <button id="wrapWithErrorBtn"

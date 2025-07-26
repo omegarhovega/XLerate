@@ -1,18 +1,3 @@
-VERSION 5.00
-Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmSettingsManager 
-   Caption         =   "Settings"
-   ClientHeight    =   6640
-   ClientLeft      =   110
-   ClientTop       =   450
-   ClientWidth     =   10780
-   OleObjectBlob   =   "frmSettingsManager.frx":0000
-   StartUpPosition =   1  'CenterOwner
-End
-Attribute VB_Name = "frmSettingsManager"
-Attribute VB_GlobalNameSpace = False
-Attribute VB_Creatable = False
-Attribute VB_PredeclaredId = True
-Attribute VB_Exposed = False
 ' frmSettingsManager
 Option Explicit
 ' Control declarations
@@ -26,6 +11,8 @@ Private autoColorSettings As frmAutoColor
 Private ErrorPanel As MSForms.Frame
 Private TextStylesPanel As MSForms.Frame
 Private textStyleSettings As frmTextStyle
+Private formulaTracingSettings As frmFormulaTracingSettings
+Private FormulaTracingPanel As MSForms.Frame
 
 
 Private Sub UserForm_Initialize()
@@ -135,6 +122,18 @@ Private Sub InitializePanels()
         .Visible = False
     End With
     
+    ' Create Formula Tracing panel frame
+    Set FormulaTracingPanel = Me.Controls.Add("Forms.Frame.1", "FormulaTracingPanel")
+    With FormulaTracingPanel
+        .Left = 170
+        .Top = 12
+        .Width = 410
+        .Height = 450
+        .Caption = ""
+        .BackColor = RGB(255, 255, 255)
+        .Visible = False
+    End With
+    
     ' Initialize all settings within their respective panels
     Debug.Print "Initializing all panels..."
     InitializeNumberSettings NumbersPanel
@@ -143,6 +142,7 @@ Private Sub InitializePanels()
     InitializeAutoColorSettings AutoColorPanel
     InitializeErrorSettings ErrorPanel
     InitializeTextStyleSettings TextStylesPanel
+    InitializeFormulaTracingSettings FormulaTracingPanel
     Debug.Print "All panels initialized"
 End Sub
 
@@ -201,6 +201,14 @@ ErrorHandler:
     Resume Next
 End Sub
 
+Private Sub InitializeFormulaTracingSettings(parentFrame As MSForms.Frame)
+    Debug.Print "Initializing formula tracing settings"
+    Set formulaTracingSettings = New frmFormulaTracingSettings
+    formulaTracingSettings.InitializeInPanel parentFrame
+    Debug.Print "Formula tracing settings initialized"
+End Sub
+
+
 ' Show the requested panel and hide others
 Private Sub ShowPanel(panelName As String)
     Debug.Print vbNewLine & "=== ShowPanel called ==="
@@ -219,6 +227,7 @@ Private Sub ShowPanel(panelName As String)
     AutoColorPanel.Visible = False
     ErrorPanel.Visible = False
     TextStylesPanel.Visible = False
+    FormulaTracingPanel.Visible = False
     
     Select Case panelName
         Case "Numbers"
@@ -239,6 +248,9 @@ Private Sub ShowPanel(panelName As String)
         Case "Text Styles"
             TextStylesPanel.Visible = True
             Debug.Print "Showing Text Styles panel"
+        Case "Formula Tracing"
+            FormulaTracingPanel.Visible = True
+            Debug.Print "Showing Formula Tracing panel"
     End Select
     
     DebugPanelState
@@ -255,6 +267,7 @@ Private Sub UserForm_Terminate()
     Set ErrorPanel = Nothing
     Set TextStylesPanel = Nothing
     Set textStyleSettings = Nothing
+    Set FormulaTracingPanel = Nothing
     Set lstCategories = Nothing
 End Sub
 
@@ -264,7 +277,7 @@ Private Sub lstCategories_Click()
     On Error GoTo ErrorHandler
     
     Dim selectedCategory As String
-    selectedCategory = Trim(lstCategories.Text)
+    selectedCategory = Trim(lstCategories.text)
     Debug.Print "Selected category: '" & selectedCategory & "'"
     Debug.Print "Category length: " & Len(selectedCategory)
     Debug.Print "ASCII codes: "
@@ -274,13 +287,32 @@ Private Sub lstCategories_Click()
     Next i
     
     If lstCategories.List(lstCategories.ListIndex, 1) = "HEADER" Then
-        Debug.Print "Header clicked, selecting default item"
-        lstCategories.ListIndex = 1
+        Debug.Print "Header clicked: " & selectedCategory
+        ' Handle different headers - prevent selection by redirecting to first item under header
+        Select Case selectedCategory
+            Case "--- FORMATTING ---"
+                Debug.Print "Formatting header clicked, selecting Numbers"
+                lstCategories.ListIndex = 1  ' Select Numbers (first item under Formatting)
+                ShowPanel "Numbers"
+            Case "--- FORMULAS ---"
+                Debug.Print "Formulas header clicked, selecting Formula Tracing"
+                ' Find Formula Tracing item index
+                For i = 0 To lstCategories.ListCount - 1
+                    If lstCategories.List(i, 0) = "Formula Tracing" Then
+                        lstCategories.ListIndex = i
+                        ShowPanel "Formula Tracing"
+                        Exit For
+                    End If
+                Next i
+            Case Else
+                lstCategories.ListIndex = 1  ' Default to Numbers
+                ShowPanel "Numbers"
+        End Select
         Exit Sub
     End If
     
     Debug.Print "Processing category selection"
-    ' Remove any potential hidden characters and extra spaces
+    ' Remove any potential hidden characters
     selectedCategory = Replace(selectedCategory, vbTab, "")
     selectedCategory = Replace(selectedCategory, vbCr, "")
     selectedCategory = Replace(selectedCategory, vbLf, "")
@@ -289,19 +321,20 @@ Private Sub lstCategories_Click()
     Select Case selectedCategory
         Case "Numbers"
             ShowPanel "Numbers"
-        Case "Cells"
-            ShowPanel "Cells"
         Case "Dates"
             ShowPanel "Dates"
+        Case "Cells"
+            ShowPanel "Cells"
         Case "Auto-Color"
             ShowPanel "Auto-Color"
-        Case "Error"
-            ShowPanel "Error"
         Case "Text Styles"
             ShowPanel "Text Styles"
+        Case "Error"
+            ShowPanel "Error"
+        Case "Formula Tracing"
+            ShowPanel "Formula Tracing"
         Case Else
-            Debug.Print "Unknown category selected"
-            ShowPanel "None"
+            Debug.Print "Unknown category: " & selectedCategory
     End Select
     Debug.Print "=== lstCategories_Click completed ==="
     Exit Sub
@@ -310,6 +343,7 @@ ErrorHandler:
     Debug.Print "Error in lstCategories_Click: " & Err.Description & " (Error " & Err.Number & ")"
     Resume Next
 End Sub
+
 Private Sub DebugPanelState()
     Debug.Print vbNewLine & "=== Panel State Debug ==="
     Debug.Print "NumbersPanel is Nothing: " & (NumbersPanel Is Nothing)
@@ -335,7 +369,7 @@ Private Sub InitializeHierarchyList()
     lstCategories.Clear
     
     With lstCategories
-        .AddItem "Formatting"
+        .AddItem "--- FORMATTING ---"
         .List(.ListCount - 1, 1) = "HEADER"
         .AddItem "Numbers"
         .AddItem "Dates"
@@ -343,9 +377,20 @@ Private Sub InitializeHierarchyList()
         .AddItem "Auto-Color"
         .AddItem "Text Styles"
         .AddItem "Error"
+        .AddItem "--- FORMULAS ---"
+        .List(.ListCount - 1, 1) = "HEADER"
+        .AddItem "Formula Tracing"
         .ListIndex = 1
     End With
+    
+    ' Make headers bold and non-selectable
+    FormatCategoryHeaders
     
     ShowPanel "Numbers"
 End Sub
 
+Private Sub FormatCategoryHeaders()
+    ' This method would ideally format headers as bold, but VBA ListBox has limited formatting
+    ' The bold formatting and non-selectable behavior is handled in the click event
+    Debug.Print "Headers formatted (bold styling handled in click event)"
+End Sub

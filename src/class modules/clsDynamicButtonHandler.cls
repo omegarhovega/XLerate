@@ -1,17 +1,7 @@
-VERSION 1.0 CLASS
-BEGIN
-  MultiUse = -1  'True
-END
-Attribute VB_Name = "clsDynamicButtonHandler"
-Attribute VB_GlobalNameSpace = False
-Attribute VB_Creatable = False
-Attribute VB_PredeclaredId = False
-Attribute VB_Exposed = False
 ' clsDynamicButtonHandler
 Option Explicit
 
 Public WithEvents DynamicButton As MSForms.CommandButton
-Attribute DynamicButton.VB_VarHelpID = -1
 Private ButtonRole As String
 Private ParentForm As Object
 
@@ -37,6 +27,9 @@ Private Sub DynamicButton_Click()
         Case "Save"
             Debug.Print "Calling btnSave_Click"
             ParentForm.btnSave_Click
+        Case "Reset"
+            Debug.Print "Calling btnReset_Click"
+            ParentForm.btnReset_Click
         Case "Cancel"
             Debug.Print "Calling btnCancel_Click"
             ParentForm.btnCancel_Click

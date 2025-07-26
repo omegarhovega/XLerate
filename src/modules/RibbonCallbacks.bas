@@ -48,6 +48,12 @@ Public Sub DoCycleDateFormat(control As IRibbonControl)
     On Error GoTo 0
 End Sub
 
+Public Sub DoCycleTextStyle(control As IRibbonControl)
+    On Error Resume Next
+    Application.Run "ModTextStyle.CycleTextStyle"
+    On Error GoTo 0
+End Sub
+
 Public Sub ShowSettingsForm(control As IRibbonControl)
     Debug.Print "ShowSettingsForm callback was triggered"
     ShowSettings   ' Direct call instead of Application.Run
