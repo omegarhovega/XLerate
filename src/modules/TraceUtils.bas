@@ -473,8 +473,8 @@ Private Function GetDirectReferences(aCell As Range, blnPrecedents As Boolean) A
         ' For dependents: only proceed if cell has a value that could be referenced
         ' Similar to HasFormula check for precedents
         If Not IsEmpty(aCell.Value) Then
-            ' Cell has a value, so it might have dependents - but don't call ShowDependents
-            ' We'll rely on NavigateArrow to detect dependents without the beep
+            ' Cell has a value, so it might have dependents - call ShowDependents to create arrows
+            aCell.ShowDependents
         End If
     End If
 
