@@ -58,3 +58,11 @@ Thumbs.db
 *.log
 logs/
 Log/
+
+# Node / TypeScript artifacts
+**/node_modules/
+**/coverage/
+**/.vitest/
+
+# Temporary migration workspace
+ts-port/
