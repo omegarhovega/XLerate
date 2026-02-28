@@ -1,55 +1,50 @@
-<!-- Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT License. -->
-<!-- This file shows how to design a first-run page that provides a welcome screen to the user about the features of the add-in. -->
-
 <!DOCTYPE html>
 <html>
-
 <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Contoso Task Pane Add-in</title>
-
-    <!-- Office JavaScript API -->
-    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
-
-    <!-- For more information on Fluent UI, visit https://developer.microsoft.com/fluentui#/. -->
-    <link rel="stylesheet" href="https://res-1.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css"/>
-
-    <!-- Template styles -->
-    <link href="taskpane.css" rel="stylesheet" type="text/css" />
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>XLerate</title>
+  <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <link rel="stylesheet" href="https://res-1.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css" />
+  <link href="taskpane.css" rel="stylesheet" type="text/css" />
 </head>
+<body class="ms-Fabric">
+  <section id="sideload-msg" class="app">
+    <h3>Please sideload the add-in to use XLerate actions.</h3>
+  </section>
 
-<body class="ms-font-m ms-welcome ms-Fabric">
-    <header class="ms-welcome__header ms-bgColor-neutralLighter">
-        <img width="90" height="90" src="../../assets/logo-filled.png" alt="Contoso" title="Contoso" />
-        <h1 class="ms-font-su">Welcome</h1>
+  <main id="app-body" class="app" style="display: none;">
+    <header class="header">
+      <img width="32" height="32" src="../../assets/icon-32.png" alt="XLerate" />
+      <h1>XLerate</h1>
     </header>
-    <section id="sideload-msg" class="ms-welcome__main">
-        <h2 class="ms-font-xl">Please <a target="_blank" href="https://learn.microsoft.com/office/dev/add-ins/testing/test-debug-office-add-ins#sideload-an-office-add-in-for-testing">sideload</a> your add-in to see app body.</h2>
-    </section>
-    <main id="app-body" class="ms-welcome__main" style="display: none;">
-        <h2 class="ms-font-xl"> Discover what Office Add-ins can do for you today! </h2>
-        <ul class="ms-List ms-welcome__features">
-            <li class="ms-ListItem">
-                <i class="ms-Icon ms-Icon--Ribbon ms-font-xl"></i>
-                <span class="ms-font-m">Achieve more with Office integration</span>
-            </li>
-            <li class="ms-ListItem">
-                <i class="ms-Icon ms-Icon--Unlock ms-font-xl"></i>
-                <span class="ms-font-m">Unlock features and functionality</span>
-            </li>
-            <li class="ms-ListItem">
-                <i class="ms-Icon ms-Icon--Design ms-font-xl"></i>
-                <span class="ms-font-m">Create and visualize like a pro</span>
-            </li>
-        </ul>
-        <p class="ms-font-l">Modify the source files, then click <b>Run</b>.</p>
-        <div role="button" id="run" class="ms-welcome__action ms-Button ms-Button--hero ms-font-xl">
-            <span class="ms-Button-label">Run</span>
-        </div>
-        <p><label id="item-subject"></label></p>
-    </main>
-</body>
 
+    <div class="panel">
+      <h3>Formatting / Formulas</h3>
+      <button id="run-cycle-number-format" class="action-btn">Cycle Number Format (Selection)</button>
+      <button id="run-switch-sign" class="action-btn">Switch Sign (Selection)</button>
+
+      <div class="row">
+        <label for="error-value">Error Wrap fallback</label>
+        <input id="error-value" type="text" value="NA()" />
+      </div>
+      <button id="run-error-wrap" class="action-btn">Error Wrap (Selection)</button>
+      <button id="run-smart-fill-right" class="action-btn">Smart Fill Right (Active Cell)</button>
+      <button id="run-formula-consistency" class="action-btn">Formula Consistency (Selection)</button>
+    </div>
+
+    <div class="panel">
+      <h3>CAGR</h3>
+      <p>Select a range, then calculate CAGR from first to last value.</p>
+      <button id="run-cagr" class="action-btn">Calculate CAGR</button>
+      <div class="result">Result: <span id="cagr-result">-</span></div>
+    </div>
+
+    <div class="panel status">
+      <strong>Status</strong>
+      <p id="status-text">Ready.</p>
+    </div>
+  </main>
+</body>
 </html>

@@ -66,3 +66,6 @@ Log/
 
 # Temporary migration workspace
 ts-port/
+
+# Office add-in webpack output
+XLerate/dist/

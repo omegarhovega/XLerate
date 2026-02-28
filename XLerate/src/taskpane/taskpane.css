@@ -1,80 +1,81 @@
-/* 
- * Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT license.
- * See LICENSE in the project root for license information.
- */
-
- html,
- body {
-     width: 100%;
-     height: 100%;
-     margin: 0;
-     padding: 0;
- }
- 
- ul {
-     margin: 0;
-     padding: 0;
- }
- 
- .ms-welcome__header {
-    padding: 20px;
-    padding-bottom: 30px;
-    padding-top: 100px;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-flex-direction: column;
-    flex-direction: column;
-    align-items: center;
- }
-
- .ms-welcome__main {
-    display: -webkit-flex;
-    display: flex;
-    -webkit-flex-direction: column;
-    flex-direction: column;
-    -webkit-flex-wrap: nowrap;
-    flex-wrap: nowrap;
-    -webkit-align-items: center;
-    align-items: center;
-    -webkit-flex: 1 0 0;
-    flex: 1 0 0;
-    padding: 10px 20px;
- }
- 
- .ms-welcome__main > h2 {
-     width: 100%;
-     text-align: center;
- }
- 
- .ms-welcome__features {
-     list-style-type: none;
-     margin-top: 20px;
- }
- 
- .ms-welcome__features.ms-List .ms-ListItem {
-     padding-bottom: 20px;
-     display: -webkit-flex;
-     display: flex;
- }
- 
- .ms-welcome__features.ms-List .ms-ListItem > .ms-Icon {
-     margin-right: 10px;
- }
- 
- .ms-welcome__action.ms-Button--hero {
-     margin-top: 30px;
- }
- 
-.ms-Button.ms-Button--hero .ms-Button-label {
-  color: #0078d7;
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
 }
 
-.ms-Button.ms-Button--hero:hover .ms-Button-label,
-.ms-Button.ms-Button--hero:focus .ms-Button-label{
-  color: #005a9e;
+body {
+  font-family: "Segoe UI", sans-serif;
+  background: #f7f7f7;
+  color: #222;
+}
+
+.app {
+  padding: 12px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.panel {
+  background: #fff;
+  border: 1px solid #e3e3e3;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.panel h3 {
+  margin: 0 0 10px 0;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.row input {
+  border: 1px solid #c8c8c8;
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.action-btn {
+  width: 100%;
+  margin-bottom: 8px;
+  border: 1px solid #0f5ea8;
+  background: #0f5ea8;
+  color: #fff;
+  border-radius: 4px;
+  padding: 8px 10px;
   cursor: pointer;
 }
 
-b {
-    font-weight: bold;
+.action-btn:hover {
+  background: #0b4c89;
+}
+
+.result {
+  margin-top: 6px;
+}
+
+.status {
+  border-left: 4px solid #0f5ea8;
+}
+
+#status-text {
+  margin: 6px 0 0 0;
 }
