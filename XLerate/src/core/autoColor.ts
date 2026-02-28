@@ -1,0 +1,185 @@
+export type AutoColorCategory =
+  | "input"
+  | "formula"
+  | "worksheetLink"
+  | "workbookLink"
+  | "external"
+  | "hyperlink"
+  | "partialInput"
+  | "none";
+
+export type AutoColorCell = {
+  formula?: string | null;
+  value?: unknown;
+  numberFormat?: string | null;
+  hasHyperlink?: boolean;
+};
+
+export type AutoColorPalette = Record<Exclude<AutoColorCategory, "none">, string>;
+
+const CELL_REFERENCE_REGEX = /[$]?[A-Za-z]+[$]?[0-9]+|R[0-9]*C[0-9]*/;
+const WORKBOOK_LINK_REGEX = /\[[^\]]+\]/;
+const SHEET_REFERENCE_REGEX = /(\[[^\]]+\])?'?[^!]+!'?/g;
+const A1_REFERENCE_REGEX = /[$]?[A-Za-z]+[$]?[0-9]+/g;
+const R1C1_REFERENCE_REGEX = /R[0-9]*C[0-9]*/g;
+
+const COMMON_FUNCTIONS = ["SUM", "AVERAGE", "COUNT", "LEFT", "RIGHT", "MID", "ROUND"];
+
+export const DEFAULT_AUTO_COLOR_PALETTE: AutoColorPalette = {
+  input: "#0000FF",
+  formula: "#000000",
+  worksheetLink: "#008000",
+  workbookLink: "#CC99FF",
+  external: "#00B0F0",
+  hyperlink: "#FF8000",
+  partialInput: "#800000"
+};
+
+function normalizeFormula(formula: string): string {
+  return formula.startsWith("=") ? formula.slice(1) : formula;
+}
+
+function isFormulaCell(formula: string | null | undefined): boolean {
+  return typeof formula === "string" && formula.startsWith("=");
+}
+
+function isDateLikeFormat(numberFormat: string | null | undefined): boolean {
+  if (!numberFormat) {
+    return false;
+  }
+
+  const cleaned = numberFormat
+    .toLowerCase()
+    .replace(/"[^"]*"/g, "")
+    .replace(/\\./g, "");
+
+  return /(\[\$-f800\]|yyyy|yy|mmmm|mmm|mm|m|dddd|ddd|dd|d|h|s|am\/pm)/i.test(cleaned);
+}
+
+function isDateLikeValue(value: unknown, numberFormat: string | null | undefined): boolean {
+  if (value instanceof Date) {
+    return true;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return isDateLikeFormat(numberFormat);
+  }
+
+  return false;
+}
+
+export function isOnlyNumbersAndOperators(formula: string): boolean {
+  const normalized = normalizeFormula(formula);
+  return /^[-+*/\d\s.,()]*$/.test(normalized);
+}
+
+function hasCellReference(formula: string): boolean {
+  return CELL_REFERENCE_REGEX.test(normalizeFormula(formula));
+}
+
+export function isWorkbookLinkFormula(formula: string): boolean {
+  return WORKBOOK_LINK_REGEX.test(formula);
+}
+
+export function isWorksheetLinkFormula(formula: string): boolean {
+  return formula.includes("!") && !isWorkbookLinkFormula(formula);
+}
+
+export function isExternalReferenceFormula(formula: string): boolean {
+  const upper = formula.toUpperCase();
+  return upper.includes("WEBSERVICE") || upper.includes("ODBC") || upper.includes("SQL");
+}
+
+export function isInputCell(cell: AutoColorCell): boolean {
+  const value = cell.value;
+  const formula = cell.formula ?? null;
+
+  if (value === null || value === undefined || value === "") {
+    return false;
+  }
+
+  if (typeof value === "string") {
+    return false;
+  }
+
+  if (isDateLikeValue(value, cell.numberFormat ?? null)) {
+    return false;
+  }
+
+  if (isFormulaCell(formula)) {
+    if (!hasCellReference(formula!)) {
+      return true;
+    }
+    return isOnlyNumbersAndOperators(formula!);
+  }
+
+  return true;
+}
+
+export function isPartialInputFormula(cell: AutoColorCell): boolean {
+  const formula = cell.formula ?? null;
+  if (!isFormulaCell(formula)) {
+    return false;
+  }
+
+  if (typeof cell.value === "string") {
+    return false;
+  }
+
+  if (isDateLikeValue(cell.value, cell.numberFormat ?? null)) {
+    return false;
+  }
+
+  if (isOnlyNumbersAndOperators(formula!)) {
+    return false;
+  }
+
+  let candidate = normalizeFormula(formula!);
+  candidate = candidate.replace(SHEET_REFERENCE_REGEX, "SHEET_REF!");
+
+  for (const func of COMMON_FUNCTIONS) {
+    candidate = candidate.replace(new RegExp(func, "g"), "");
+  }
+
+  candidate = candidate.replace(/[$%]/g, "");
+  candidate = candidate.replace(A1_REFERENCE_REGEX, "");
+  candidate = candidate.replace(R1C1_REFERENCE_REGEX, "");
+
+  return /[0-9]+/.test(candidate);
+}
+
+export function classifyAutoColorCell(cell: AutoColorCell): AutoColorCategory {
+  const formula = cell.formula ?? null;
+  if (isFormulaCell(formula)) {
+    if (isPartialInputFormula(cell)) {
+      return "partialInput";
+    }
+    if (isWorkbookLinkFormula(formula!)) {
+      return "workbookLink";
+    }
+    if (isWorksheetLinkFormula(formula!)) {
+      return "worksheetLink";
+    }
+    if (isExternalReferenceFormula(formula!)) {
+      return "external";
+    }
+    if (isInputCell(cell)) {
+      return "input";
+    }
+    return "formula";
+  }
+
+  if (cell.hasHyperlink) {
+    return "hyperlink";
+  }
+
+  if (isInputCell(cell)) {
+    return "input";
+  }
+
+  return "none";
+}
+
+export function classifyAutoColorGrid(cells: AutoColorCell[][]): AutoColorCategory[][] {
+  return cells.map((row) => row.map((cell) => classifyAutoColorCell(cell)));
+}

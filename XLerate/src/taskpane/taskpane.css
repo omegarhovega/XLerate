@@ -53,6 +53,20 @@ body {
   padding: 6px 8px;
 }
 
+.row textarea {
+  border: 1px solid #c8c8c8;
+  border-radius: 4px;
+  padding: 6px 8px;
+  resize: vertical;
+  min-height: 140px;
+}
+
+.mono-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .action-btn {
   width: 100%;
   margin-bottom: 8px;
@@ -66,6 +80,66 @@ body {
 
 .action-btn:hover {
   background: #0b4c89;
+}
+
+.secondary-btn {
+  background: #f4f4f4;
+  border-color: #c8c8c8;
+  color: #333;
+}
+
+.secondary-btn:hover {
+  background: #e7e7e7;
+}
+
+.trace-table-wrap {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid #e3e3e3;
+  border-radius: 4px;
+}
+
+.trace-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.trace-table th,
+.trace-table td {
+  border-bottom: 1px solid #efefef;
+  text-align: left;
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+.trace-table thead th {
+  position: sticky;
+  top: 0;
+  background: #fafafa;
+}
+
+.trace-row-clickable {
+  cursor: pointer;
+}
+
+.trace-row-clickable:hover {
+  background: #f5f9ff;
+}
+
+.trace-link-btn {
+  border: 0;
+  background: transparent;
+  color: #0f5ea8;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+  font: inherit;
+}
+
+.trace-link-btn:hover {
+  color: #0b4c89;
 }
 
 .result {

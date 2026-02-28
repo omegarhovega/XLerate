@@ -23,6 +23,11 @@
     <div class="panel">
       <h3>Formatting / Formulas</h3>
       <button id="run-cycle-number-format" class="action-btn">Cycle Number Format (Selection)</button>
+      <button id="run-cycle-date-format" class="action-btn">Cycle Date Format (Selection)</button>
+      <button id="run-cycle-cell-format" class="action-btn">Cycle Cell Format (Selection)</button>
+      <button id="run-cycle-text-style" class="action-btn">Cycle Text Style (Selection)</button>
+      <button id="run-reset-format-settings" class="action-btn">Reset Format Settings (Defaults)</button>
+      <button id="run-auto-color" class="action-btn">Auto-color Numbers (Selection)</button>
       <button id="run-switch-sign" class="action-btn">Switch Sign (Selection)</button>
 
       <div class="row">
@@ -39,6 +44,46 @@
       <p>Select a range, then calculate CAGR from first to last value.</p>
       <button id="run-cagr" class="action-btn">Calculate CAGR</button>
       <div class="result">Result: <span id="cagr-result">-</span></div>
+    </div>
+
+    <div class="panel">
+      <h3>Trace</h3>
+      <p>Trace direct precedents/dependents recursively from the active cell.</p>
+      <div class="row">
+        <label for="trace-max-depth">Max depth (1-20)</label>
+        <input id="trace-max-depth" type="number" min="1" max="20" value="5" />
+      </div>
+      <button id="run-trace-precedents" class="action-btn">Trace Precedents (Active Cell)</button>
+      <button id="run-trace-dependents" class="action-btn">Trace Dependents (Active Cell)</button>
+      <div class="trace-table-wrap">
+        <table class="trace-table">
+          <thead>
+            <tr>
+              <th>Level</th>
+              <th>Address</th>
+              <th>Value</th>
+              <th>Formula</th>
+            </tr>
+          </thead>
+          <tbody id="trace-results-body">
+            <tr>
+              <td colspan="4">No trace results.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Format Settings</h3>
+      <p>Edit JSON for number/date/cell/text presets used by cycle actions.</p>
+      <div class="row">
+        <label for="format-settings-json">Settings JSON</label>
+        <textarea id="format-settings-json" class="mono-input" rows="14"></textarea>
+      </div>
+      <button id="load-format-settings" class="action-btn secondary-btn">Load Saved Settings</button>
+      <button id="load-default-format-settings" class="action-btn secondary-btn">Load Defaults</button>
+      <button id="save-format-settings" class="action-btn">Save Format Settings</button>
     </div>
 
     <div class="panel status">

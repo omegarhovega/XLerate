@@ -41,4 +41,15 @@ describe("cycle number format baseline parity", () => {
 
     expect(computeNextNumberFormat("General", false)).toBe(first);
   });
+
+  it("uses provided custom configured formats", () => {
+    const customFormats = [
+      { name: "Custom-1", formatCode: "0.0" },
+      { name: "Custom-2", formatCode: "0.00" }
+    ];
+
+    expect(computeNextNumberFormat("0.0", false, customFormats)).toBe("0.00");
+    expect(computeNextNumberFormat("0.00", false, customFormats)).toBe("0.0");
+    expect(computeNextNumberFormat("General", false, customFormats)).toBe("0.0");
+  });
 });
