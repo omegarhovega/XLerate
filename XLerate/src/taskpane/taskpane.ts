@@ -14,7 +14,7 @@ import {
   type FormulaConsistencyCell,
   type FormulaConsistencyMark
 } from "../core/formulaConsistency";
-import { computeNextNumberFormat, hasMixedNumberFormats } from "../core/numberFormatCycle";
+import { runCycleNumberFormat as runCycleNumberFormatService } from "../services/cycleNumberFormat.service";
 import { computeSmartFillRight, type SmartFillRow } from "../core/smartFillRight";
 import { ExcelPortLive } from "../adapters/excelPortLive";
 import { runClearConsistencyMarks } from "../services/clearConsistencyMarks.service";
@@ -661,29 +661,10 @@ async function runSwitchSign(): Promise<void> {
 }
 
 async function runCycleNumberFormat(): Promise<void> {
-  await Excel.run(async (context) => {
-    const formatSettings = readResolvedFormatSettings();
-    const configuredFormats = formatSettings.numberFormats;
-    const range = context.workbook.getSelectedRange();
-    range.load(["numberFormat", "rowCount", "columnCount", "address"]);
-    await context.sync();
-
-    const selectionFormats = flattenFormatMatrix(range.numberFormat as unknown[][]);
-    if (selectionFormats.length === 0) {
-      setStatus("Cycle Number Format skipped: empty selection.");
-      return;
-    }
-
-    const currentFormat = selectionFormats[0];
-    const mixedSelection = hasMixedNumberFormats(selectionFormats);
-    const nextFormat = computeNextNumberFormat(currentFormat, mixedSelection, configuredFormats);
-
-    range.numberFormat = makeFormatMatrix(range.rowCount, range.columnCount, nextFormat);
-    await context.sync();
-
-    const formatName = configuredFormats.find((item) => item.formatCode === nextFormat)?.name ?? "custom format";
-    setStatus(`Cycle Number Format applied "${formatName}" on ${range.address}.`);
-  });
+  const formatSettings = readResolvedFormatSettings();
+  const configuredFormats = formatSettings.numberFormats;
+  await runCycleNumberFormatService(new ExcelPortLive(), configuredFormats);
+  setStatus("Cycled number format.");
 }
 
 async function runCycleDateFormat(): Promise<void> {
