@@ -134,6 +134,12 @@ export function isPartialInputFormula(cell: AutoColorCell): boolean {
     return false;
   }
 
+  // A formula with no cell references cannot be a partial input — it is a
+  // pure formula even if it contains numeric literals (e.g. =IF(TRUE,1,0)).
+  if (!hasCellReference(formula!)) {
+    return false;
+  }
+
   let candidate = normalizeFormula(formula!);
   candidate = candidate.replace(SHEET_REFERENCE_REGEX, "SHEET_REF!");
 
