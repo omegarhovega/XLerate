@@ -17,6 +17,7 @@ import {
 import { computeNextNumberFormat, hasMixedNumberFormats } from "../core/numberFormatCycle";
 import { computeSmartFillRight, type SmartFillRow } from "../core/smartFillRight";
 import { ExcelPortLive } from "../adapters/excelPortLive";
+import { runClearConsistencyMarks } from "../services/clearConsistencyMarks.service";
 import { runErrorWrap as runErrorWrapService } from "../services/errorWrap.service";
 import { runSwitchSign as runSwitchSignService } from "../services/switchSign.service";
 import {
@@ -837,6 +838,21 @@ async function runErrorWrap(): Promise<void> {
   setStatus(`Error Wrap applied with fallback "${fallbackInput}".`);
 }
 
+async function runClearConsistencyMarksHandler(): Promise<void> {
+  const confirmed = window.confirm("Clear all formula consistency marks on this sheet?");
+  if (!confirmed) return;
+
+  const port = new ExcelPortLive();
+  const cells = await port.getSelectionCells();
+  const sheetName = cells[0]?.address?.sheet;
+  if (!sheetName) {
+    setStatus("No active sheet.");
+    return;
+  }
+  await runClearConsistencyMarks(port, sheetName);
+  setStatus("Consistency marks cleared.");
+}
+
 function toSmartFillRows(values: CellValue[][], formulas: CellFormula[][]): SmartFillRow[] {
   return values.map((rowValues, r) =>
     rowValues.map((value, c) => {
@@ -1087,5 +1103,8 @@ Office.onReady((info) => {
   document
     .getElementById("run-formula-consistency")
     ?.addEventListener("click", () => guardedRun(runFormulaConsistency));
+  document
+    .getElementById("clearConsistencyMarks")
+    ?.addEventListener("click", () => guardedRun(runClearConsistencyMarksHandler));
   document.getElementById("run-cagr")?.addEventListener("click", () => guardedRun(runCagr));
 });
