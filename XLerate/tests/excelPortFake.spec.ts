@@ -102,4 +102,129 @@ describe("ExcelPortFake", () => {
     const snaps = await port.getSelectionCells();
     expect(snaps.map((s) => s.value)).toEqual([1, 2, 3]);
   });
+
+  it("returns empty formatting snapshots when no selection", async () => {
+    const port = new ExcelPortFake();
+    expect(await port.getSelectionFormatting()).toEqual([]);
+  });
+
+  it("reports default formatting for a cell with a value only", async () => {
+    const port = new ExcelPortFake();
+    port.setCellValue(addr(0, 0), 100);
+    port.setSelection([addr(0, 0)]);
+    const [snap] = await port.getSelectionFormatting();
+    expect(snap.address).toEqual(addr(0, 0));
+    expect(snap.numberFormat).toBe("General");
+    expect(snap.hasHyperlink).toBe(false);
+    expect(snap.fontColor).toBe(null);
+    expect(snap.fillColor).toBe(null);
+  });
+
+  it("lets tests seed formatting via setCellFormatting", async () => {
+    const port = new ExcelPortFake();
+    port.setCellFormatting(addr(0, 0), {
+      numberFormat: "#,##0.00",
+      fillColor: "#FFFF00",
+      fontColor: "#0000FF",
+      fontBold: true
+    });
+    port.setSelection([addr(0, 0)]);
+    const [snap] = await port.getSelectionFormatting();
+    expect(snap.numberFormat).toBe("#,##0.00");
+    expect(snap.fillColor).toBe("#FFFF00");
+    expect(snap.fontColor).toBe("#0000FF");
+    expect(snap.fontBold).toBe(true);
+  });
+
+  it("lets tests seed hyperlink presence", async () => {
+    const port = new ExcelPortFake();
+    port.setCellHyperlink(addr(0, 0), true);
+    port.setSelection([addr(0, 0)]);
+    const [snap] = await port.getSelectionFormatting();
+    expect(snap.hasHyperlink).toBe(true);
+  });
+
+  it("applies numberFormat mutations", async () => {
+    const port = new ExcelPortFake();
+    await port.applyMutations([{ address: addr(0, 0), kind: "numberFormat", format: "0.0%" }]);
+    port.setSelection([addr(0, 0)]);
+    const [snap] = await port.getSelectionFormatting();
+    expect(snap.numberFormat).toBe("0.0%");
+  });
+
+  it("applies fontColor mutations", async () => {
+    const port = new ExcelPortFake();
+    await port.applyMutations([{ address: addr(0, 0), kind: "fontColor", color: "#00FF00" }]);
+    port.setSelection([addr(0, 0)]);
+    const [snap] = await port.getSelectionFormatting();
+    expect(snap.fontColor).toBe("#00FF00");
+  });
+
+  it("applies formatBundle mutations with fill, font, and borders", async () => {
+    const port = new ExcelPortFake();
+    await port.applyMutations([
+      {
+        address: addr(0, 0),
+        kind: "formatBundle",
+        format: {
+          fill: { pattern: "Solid", color: "#FFFFCC" },
+          font: { color: "#0000FF", bold: true },
+          borders: {
+            clearAll: true,
+            top: { style: "Continuous", color: "#808080" },
+            bottom: { style: "Continuous", color: "#808080" }
+          }
+        }
+      }
+    ]);
+    port.setSelection([addr(0, 0)]);
+    const [snap] = await port.getSelectionFormatting();
+    expect(snap.fillPattern).toBe("Solid");
+    expect(snap.fillColor).toBe("#FFFFCC");
+    expect(snap.fontColor).toBe("#0000FF");
+    expect(snap.fontBold).toBe(true);
+    expect(snap.edgeTopStyle).toBe("Continuous");
+    expect(snap.edgeTopColor).toBe("#808080");
+    expect(snap.edgeBottomStyle).toBe("Continuous");
+    expect(snap.edgeLeftStyle).toBe(null);
+    expect(snap.edgeRightStyle).toBe(null);
+  });
+
+  it("clearAll in borders wipes existing edges before applying new ones", async () => {
+    const port = new ExcelPortFake();
+    port.setCellFormatting(addr(0, 0), {
+      edgeLeftStyle: "Continuous",
+      edgeTopStyle: "Continuous",
+      edgeBottomStyle: "Continuous",
+      edgeRightStyle: "Continuous"
+    });
+    await port.applyMutations([
+      {
+        address: addr(0, 0),
+        kind: "formatBundle",
+        format: {
+          borders: { clearAll: true, top: { style: "Double" } }
+        }
+      }
+    ]);
+    port.setSelection([addr(0, 0)]);
+    const [snap] = await port.getSelectionFormatting();
+    expect(snap.edgeTopStyle).toBe("Double");
+    expect(snap.edgeLeftStyle).toBe(null);
+    expect(snap.edgeBottomStyle).toBe(null);
+    expect(snap.edgeRightStyle).toBe(null);
+  });
+
+  it("clearSheetFill removes fills on the named sheet only", async () => {
+    const port = new ExcelPortFake();
+    port.setCellFormatting(addr(0, 0, "Sheet1"), { fillColor: "#FFFF00" });
+    port.setCellFormatting(addr(0, 0, "Sheet2"), { fillColor: "#FF0000" });
+    await port.clearSheetFill("Sheet1");
+
+    port.setSelection([addr(0, 0, "Sheet1")]);
+    expect((await port.getSelectionFormatting())[0].fillColor).toBe(null);
+
+    port.setSelection([addr(0, 0, "Sheet2")]);
+    expect((await port.getSelectionFormatting())[0].fillColor).toBe("#FF0000");
+  });
 });
