@@ -17,7 +17,7 @@ export async function runErrorWrap(port: ExcelPort, errorValue = "NA()"): Promis
       mutations.push({
         address: cell.address,
         kind: cell.isArrayFormula ? "arrayFormula" : "formula",
-        formula: wrapped
+        formula: wrapped,
       });
     }
   }
