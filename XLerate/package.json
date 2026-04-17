@@ -27,6 +27,7 @@
     "test:core": "vitest run",
     "test:core:watch": "vitest",
     "typecheck:core": "tsc -p tsconfig.vitest.json --noEmit",
+    "typecheck:harness": "tsc -p tsconfig.harness.json --noEmit",
     "start:wsl": "webpack serve --mode development",
     "stop:wsl": "sh -c 'fuser -k 3000/tcp 2>/dev/null || true'",
     "start:web:manual": "webpack serve --mode development"

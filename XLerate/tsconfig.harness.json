@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "types": ["office-js", "node"],
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/adapters/**/*.ts",
+    "src/services/**/*.ts",
+    "tests/excelPortFake.spec.ts",
+    "tests/switchSign.contract.spec.ts"
+  ],
+  "exclude": ["node_modules", "dist", "lib"]
+}
