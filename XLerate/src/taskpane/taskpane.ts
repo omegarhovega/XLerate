@@ -15,6 +15,7 @@ import {
 } from "../core/formulaConsistency";
 import { runCycleNumberFormat as runCycleNumberFormatService } from "../services/cycleNumberFormat.service";
 import { runCycleDateFormat as runCycleDateFormatService } from "../services/cycleDateFormat.service";
+import { runCycleCellFormat as runCycleCellFormatService } from "../services/cycleCellFormat.service";
 import { computeSmartFillRight, type SmartFillRow } from "../core/smartFillRight";
 import { ExcelPortLive } from "../adapters/excelPortLive";
 import { runClearConsistencyMarks } from "../services/clearConsistencyMarks.service";
@@ -674,55 +675,9 @@ async function runCycleDateFormat(): Promise<void> {
 }
 
 async function runCycleCellFormat(): Promise<void> {
-  await Excel.run(async (context) => {
-    const formatSettings = readResolvedFormatSettings();
-    const configuredFormats = formatSettings.cellFormats;
-    const range = context.workbook.getSelectedRange();
-    const worksheet = range.worksheet;
-    range.load(["address", "rowCount", "columnCount"]);
-    worksheet.load("name");
-    range.format.fill.load(["pattern", "color"]);
-    range.format.font.load(["color", "bold", "italic", "underline", "strikethrough"]);
-    const borders = {
-      EdgeLeft: range.format.borders.getItem("EdgeLeft"),
-      EdgeTop: range.format.borders.getItem("EdgeTop"),
-      EdgeBottom: range.format.borders.getItem("EdgeBottom"),
-      EdgeRight: range.format.borders.getItem("EdgeRight")
-    } as const;
-    BORDER_SIDE_ITEMS.forEach((side) => borders[side].load(["style", "color"]));
-    await context.sync();
-
-    const cycleState = readCellFormatCycleState();
-    let nextFormat: CellFormatDefinition;
-    let nextIndex: number;
-
-    if (
-      cycleState &&
-      cycleState.sheetName === worksheet.name &&
-      cycleState.rangeAddress === range.address &&
-      configuredFormats.length > 0
-    ) {
-      nextIndex = (cycleState.lastIndex + 1) % configuredFormats.length;
-      nextFormat = configuredFormats[nextIndex];
-    } else {
-      const state = buildSelectionCellFormatState(range, borders);
-      nextFormat = computeNextCellFormat(state, configuredFormats);
-      nextIndex = configuredFormats.indexOf(nextFormat);
-      if (nextIndex < 0) {
-        nextIndex = 0;
-      }
-    }
-
-    applyCellFormatToRange(range, nextFormat);
-    await context.sync();
-    await writeCellFormatCycleState({
-      sheetName: worksheet.name,
-      rangeAddress: range.address,
-      lastIndex: nextIndex
-    });
-
-    setStatus(`Cycle Cell Format applied "${nextFormat.name}" on ${range.address}.`);
-  });
+  const formatSettings = readResolvedFormatSettings();
+  await runCycleCellFormatService(new ExcelPortLive(), formatSettings.cellFormats);
+  setStatus("Cycled cell format.");
 }
 
 async function runCycleTextStyle(): Promise<void> {
