@@ -3,7 +3,7 @@ import {
   computeNextNumberFormat,
   DEFAULT_NUMBER_FORMATS,
   hasMixedNumberFormats,
-  NumberFormatDefinition
+  NumberFormatDefinition,
 } from "../core/numberFormatCycle";
 
 /**
@@ -25,7 +25,7 @@ export async function runCycleNumberFormat(
   const mutations: CellMutation[] = snaps.map((s) => ({
     address: s.address,
     kind: "numberFormat",
-    format: nextFormat
+    format: nextFormat,
   }));
   await port.applyMutations(mutations);
 }
