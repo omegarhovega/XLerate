@@ -7,7 +7,6 @@ import {
   type CellFormatDefinition,
   type SelectionCellFormatState
 } from "../core/cellFormatCycle";
-import { computeNextDateFormat, hasMixedDateFormats } from "../core/dateFormatCycle";
 import { FORMAT_SETTINGS_KEY, resolveFormatSettings, type ResolvedFormatSettings } from "../core/formatSettings";
 import {
   analyzeHorizontalFormulaConsistency,
@@ -15,6 +14,7 @@ import {
   type FormulaConsistencyMark
 } from "../core/formulaConsistency";
 import { runCycleNumberFormat as runCycleNumberFormatService } from "../services/cycleNumberFormat.service";
+import { runCycleDateFormat as runCycleDateFormatService } from "../services/cycleDateFormat.service";
 import { computeSmartFillRight, type SmartFillRow } from "../core/smartFillRight";
 import { ExcelPortLive } from "../adapters/excelPortLive";
 import { runClearConsistencyMarks } from "../services/clearConsistencyMarks.service";
@@ -668,29 +668,9 @@ async function runCycleNumberFormat(): Promise<void> {
 }
 
 async function runCycleDateFormat(): Promise<void> {
-  await Excel.run(async (context) => {
-    const formatSettings = readResolvedFormatSettings();
-    const configuredFormats = formatSettings.dateFormats;
-    const range = context.workbook.getSelectedRange();
-    range.load(["numberFormat", "rowCount", "columnCount", "address"]);
-    await context.sync();
-
-    const selectionFormats = flattenFormatMatrix(range.numberFormat as unknown[][]);
-    if (selectionFormats.length === 0) {
-      setStatus("Cycle Date Format skipped: empty selection.");
-      return;
-    }
-
-    const currentFormat = selectionFormats[0];
-    const mixedSelection = hasMixedDateFormats(selectionFormats);
-    const nextFormat = computeNextDateFormat(currentFormat, mixedSelection, configuredFormats);
-
-    range.numberFormat = makeFormatMatrix(range.rowCount, range.columnCount, nextFormat);
-    await context.sync();
-
-    const formatName = configuredFormats.find((item) => item.formatCode === nextFormat)?.name ?? "custom format";
-    setStatus(`Cycle Date Format applied "${formatName}" on ${range.address}.`);
-  });
+  const formatSettings = readResolvedFormatSettings();
+  await runCycleDateFormatService(new ExcelPortLive(), formatSettings.dateFormats);
+  setStatus("Cycled date format.");
 }
 
 async function runCycleCellFormat(): Promise<void> {
