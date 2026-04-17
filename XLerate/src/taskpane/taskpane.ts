@@ -21,11 +21,7 @@ import { ExcelPortLive } from "../adapters/excelPortLive";
 import { runClearConsistencyMarks } from "../services/clearConsistencyMarks.service";
 import { runErrorWrap as runErrorWrapService } from "../services/errorWrap.service";
 import { runSwitchSign as runSwitchSignService } from "../services/switchSign.service";
-import {
-  computeNextTextStyle,
-  mapBorderWeight,
-  type TextStyleDefinition
-} from "../core/textStyleCycle";
+import { runCycleTextStyle as runCycleTextStyleService } from "../services/cycleTextStyle.service";
 import {
   buildTraceCellKey,
   formatTraceFormula,
@@ -77,9 +73,8 @@ type CellFormatCycleState = {
   lastIndex: number;
 };
 
-type TextStyleCycleState = {
-  lastIndex: number;
-};
+// Session-scoped per spec §4.2 — not persisted across workbook reopens.
+let textStyleCycleIndex = -1;
 
 type TraceRow = {
   level: number;
@@ -311,43 +306,6 @@ function applyCellFormatToRange(range: Excel.Range, format: CellFormatDefinition
   }
 }
 
-function applyTextStyleToRange(range: Excel.Range, style: TextStyleDefinition): void {
-  range.format.font.name = style.fontName;
-  range.format.font.size = style.fontSize;
-  range.format.font.bold = style.bold;
-  range.format.font.italic = style.italic;
-  range.format.font.underline = style.underline ? "Single" : "None";
-  range.format.font.color = style.fontColor;
-  range.format.fill.color = style.backColor;
-
-  // Match VBA behavior: clear all borders, then apply configured edges only.
-  range.format.borders.getItem(Excel.BorderIndex.edgeLeft).style = Excel.BorderLineStyle.none;
-  range.format.borders.getItem(Excel.BorderIndex.edgeTop).style = Excel.BorderLineStyle.none;
-  range.format.borders.getItem(Excel.BorderIndex.edgeBottom).style = Excel.BorderLineStyle.none;
-  range.format.borders.getItem(Excel.BorderIndex.edgeRight).style = Excel.BorderLineStyle.none;
-  range.format.borders.getItem(Excel.BorderIndex.insideHorizontal).style = Excel.BorderLineStyle.none;
-  range.format.borders.getItem(Excel.BorderIndex.insideVertical).style = Excel.BorderLineStyle.none;
-
-  if (style.borderStyle === "None") {
-    return;
-  }
-
-  const weight = mapBorderWeight(style.borderStyle) as Excel.BorderWeight;
-  const apply = (side: Excel.BorderIndex, enabled: boolean): void => {
-    if (!enabled) {
-      return;
-    }
-    const border = range.format.borders.getItem(side);
-    border.style = style.borderStyle as Excel.BorderLineStyle;
-    border.weight = weight;
-  };
-
-  apply(Excel.BorderIndex.edgeTop, style.borderTop);
-  apply(Excel.BorderIndex.edgeBottom, style.borderBottom);
-  apply(Excel.BorderIndex.edgeLeft, style.borderLeft);
-  apply(Excel.BorderIndex.edgeRight, style.borderRight);
-}
-
 function readFormulaConsistencyState(): FormulaConsistencyState | null {
   const raw = Office.context.document.settings.get(FORMULA_CONSISTENCY_STATE_KEY);
   if (typeof raw !== "string" || raw.length === 0) {
@@ -418,28 +376,6 @@ function readCellFormatCycleState(): CellFormatCycleState | null {
 
 async function writeCellFormatCycleState(state: CellFormatCycleState): Promise<void> {
   Office.context.document.settings.set(CELL_FORMAT_CYCLE_STATE_KEY, JSON.stringify(state));
-  await saveDocumentSettingsAsync();
-}
-
-function readTextStyleCycleState(): TextStyleCycleState {
-  const raw = Office.context.document.settings.get(TEXT_STYLE_CYCLE_STATE_KEY);
-  if (typeof raw !== "string" || raw.length === 0) {
-    return { lastIndex: -1 };
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as TextStyleCycleState;
-    if (typeof parsed.lastIndex === "number") {
-      return parsed;
-    }
-    return { lastIndex: -1 };
-  } catch {
-    return { lastIndex: -1 };
-  }
-}
-
-async function writeTextStyleCycleState(state: TextStyleCycleState): Promise<void> {
-  Office.context.document.settings.set(TEXT_STYLE_CYCLE_STATE_KEY, JSON.stringify(state));
   await saveDocumentSettingsAsync();
 }
 
@@ -681,21 +617,14 @@ async function runCycleCellFormat(): Promise<void> {
 }
 
 async function runCycleTextStyle(): Promise<void> {
-  await Excel.run(async (context) => {
-    const formatSettings = readResolvedFormatSettings();
-    const configuredStyles = formatSettings.textStyles;
-    const range = context.workbook.getSelectedRange();
-    range.load(["address"]);
-    await context.sync();
-
-    const current = readTextStyleCycleState();
-    const next = computeNextTextStyle(current.lastIndex, configuredStyles);
-    applyTextStyleToRange(range, next.style);
-    await context.sync();
-
-    await writeTextStyleCycleState({ lastIndex: next.index });
-    setStatus(`Cycle Text Style applied "${next.style.name}" on ${range.address}.`);
-  });
+  const formatSettings = readResolvedFormatSettings();
+  const { index } = await runCycleTextStyleService(
+    new ExcelPortLive(),
+    textStyleCycleIndex,
+    formatSettings.textStyles,
+  );
+  textStyleCycleIndex = index;
+  setStatus("Cycled text style.");
 }
 
 async function runResetFormatSettings(): Promise<void> {
