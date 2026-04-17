@@ -100,6 +100,49 @@ chokepoint that must obey this rule. If you add a new fill-touching path,
 it must go through `applyFillMutation`. Clearing fills uses
 `cell.format.fill.clear()` which resets both pattern and color.
 
+### Fill: reads back as `pattern=null` even when set — match tolerantly
+
+This is the quirk that caused Cycle Cell Format to appear broken through
+multiple fix attempts. After we write `cell.format.fill.pattern = "Solid"`
+and `cell.format.fill.color = "#FFFFCC"`, reading the same cell via
+`format.fill.pattern` returns **literal `null`** on Excel Desktop (and
+inconsistently `"None"` on Excel Online) — even though the fill is solid
+and renders correctly.
+
+Any logic that reads back a cell's formatting and compares it to a preset
+(like our Cycle Cell Format cycle-detection) **must treat `fillPattern` of
+`null` or `"None"` as potentially matching an expected `"Solid"` preset**,
+with the color comparison breaking the tie. The canonical implementation
+is `doesFillMatch` in `src/core/cellFormatCycle.ts` — copy that shape if
+you write a new format-matching path.
+
+Without this tolerance, the cycle gets stuck on whichever preset was first
+applied: the read-back never matches anything, so `computeNextCellFormat`
+always falls through to "apply the first preset."
+
+### Borders: never set `border.color` on a `None`-style border
+
+Office.js silently upgrades a border's style from `"None"` to `"Continuous"`
+the moment you assign a color to it. This is obnoxious because a clearAll
+loop that sets style to `"None"` and then an apply loop that tries to "also"
+set the color ends up leaving borders everywhere.
+
+```typescript
+// WRONG — Office.js upgrades style to Continuous
+border.style = "None";
+border.color = "#000000";
+
+// RIGHT — guard the color assignment
+border.style = "None";
+if (border.style !== "None") {
+  border.color = "#000000";
+}
+```
+
+`applyBorderEdge` in `excelPortLive.ts` enforces this rule. The pre-migration
+`setRangeBorder` helper in `taskpane.ts` had the same guard — it's a
+well-known Office.js surface bug, not something we discovered.
+
 ### Reversible operations should store original state, not bulk-wipe
 
 When a feature applies visual state to cells it did not own (e.g. the

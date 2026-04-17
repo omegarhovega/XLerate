@@ -117,15 +117,46 @@ function normalizeBool(value: boolean | null): boolean {
   return value === true;
 }
 
-function doesFillPatternMatch(state: SelectionCellFormatState, expected: CellFormatDefinition): boolean {
+/**
+ * Tolerant comparison of fill state against a preset. Handles Excel's quirk
+ * where a solid-white fill on a previously-unfilled cell is reported back as
+ * "no fill" (pattern "None", color null) on Excel Online — if we only compared
+ * pattern and color exactly, applying the Normal preset once and then reading
+ * state would never match Normal, and the cycle would be stuck on Normal
+ * forever. The tolerance applies to BOTH pattern and color together so the
+ * outer `doesSelectionMatchCellFormat` doesn't need a separate color check.
+ */
+function doesFillMatch(state: SelectionCellFormatState, expected: CellFormatDefinition): boolean {
   const actualPattern = normalizeStyle(state.fillPattern);
   const expectedPattern = normalizeStyle(expected.fillPattern);
-  if (actualPattern === expectedPattern) {
+  const actualColor = normalizeColor(state.fillColor);
+  const expectedColor = normalizeColor(expected.fillColor);
+
+  // Exact match
+  if (actualPattern === expectedPattern && actualColor === expectedColor) {
     return true;
   }
 
-  // Excel may report default white fills as "None" even when explicitly set to solid white.
-  return expectedPattern === "solid" && normalizeColor(expected.fillColor) === "#FFFFFF" && actualPattern === "none";
+  // Excel Desktop consistently returns fillPattern=null after we set
+  // .pattern="Solid" + .color=..., even though the cell IS solid-filled.
+  // Excel Online may return "None" with null color for solid-white. Treat
+  // any "pattern-unknown" state as potentially matching an expected solid
+  // fill, relying on the color comparison to disambiguate.
+  const patternLooksEmpty = actualPattern === null || actualPattern === "none";
+  const expectedIsSolid = expectedPattern === "solid";
+
+  if (expectedIsSolid && patternLooksEmpty) {
+    // Color match wins if it's exact.
+    if (actualColor === expectedColor) {
+      return true;
+    }
+    // Special case: solid white is rendered as "no fill" — null color counts.
+    if (expectedColor === "#FFFFFF" && actualColor === null) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function doesBorderMatch(state: SelectionCellFormatState, expected: CellFormatDefinition): boolean {
@@ -158,11 +189,10 @@ function doesBorderMatch(state: SelectionCellFormatState, expected: CellFormatDe
 }
 
 export function doesSelectionMatchCellFormat(state: SelectionCellFormatState, expected: CellFormatDefinition): boolean {
-  const fillPatternMatches = doesFillPatternMatch(state, expected);
-  const fillColorMatches = normalizeColor(state.fillColor) === normalizeColor(expected.fillColor);
-  const fontColorMatches = normalizeColor(state.fontColor) === normalizeColor(expected.fontColor);
-
-  if (!fillPatternMatches || !fillColorMatches || !fontColorMatches) {
+  if (!doesFillMatch(state, expected)) {
+    return false;
+  }
+  if (normalizeColor(state.fontColor) !== normalizeColor(expected.fontColor)) {
     return false;
   }
 

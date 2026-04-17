@@ -203,9 +203,9 @@ function applyFillMutation(cell: Excel.Range, fill: FillMutation): void {
     cell.format.fill.clear();
     return;
   }
-  // Order matters: Office.js requires pattern to be set for a color to render as a
-  // solid fill on a previously-unfilled cell. Setting color alone does not work
-  // reliably. Always set pattern first (when provided), then color.
+  // Order matters: Office.js requires pattern to be set for a color to render
+  // as a solid fill on a previously-unfilled cell. Setting color alone does
+  // not work reliably. Always set pattern first (when provided), then color.
   if (fill.pattern !== undefined) cell.format.fill.pattern = fill.pattern;
   if (fill.color !== undefined) cell.format.fill.color = fill.color;
 }
@@ -213,8 +213,16 @@ function applyFillMutation(cell: Excel.Range, fill: FillMutation): void {
 function applyBorderEdge(cell: Excel.Range, edge: Excel.BorderIndex, m: BorderEdgeMutation): void {
   const border = cell.format.borders.getItem(edge);
   border.style = m.style;
-  if (m.color !== undefined) border.color = m.color;
-  if (m.weight !== undefined) border.weight = m.weight as Excel.BorderWeight;
+  // Office.js quirk: assigning border.color on a "None"-style border silently
+  // upgrades the style to "Continuous". Only set color when the style is
+  // visible (not "None"). Mirrors the pre-migration setRangeBorder helper in
+  // the old taskpane.ts which had the same guard.
+  if (m.style !== "None" && m.color !== undefined) {
+    border.color = m.color;
+  }
+  if (m.style !== "None" && m.weight !== undefined) {
+    border.weight = m.weight as Excel.BorderWeight;
+  }
 }
 
 function applyBordersMutation(cell: Excel.Range, borders: BordersMutation): void {

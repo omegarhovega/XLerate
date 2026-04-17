@@ -109,15 +109,31 @@ Verify these once per session. They apply to every feature.
 
 ### Cycle Cell Format (spec §3.8)
 
+This feature has the hardest live-Excel behavior in the whole product.
+Fake-based contract tests pass trivially while live Excel exposes two
+separate Office.js quirks. Work through **all** of these steps.
+
 - [ ] Start on an empty cell. Click cycle → cell shows "Normal" (white
-      fill, black font). **Visible** fill — not just a white cell that
-      looks the same as before. Verify the fill is applied by toggling
-      into "Inputs" below.
+      fill, black font). On a fresh cell this may look identical to empty,
+      so keep clicking.
 - [ ] Click again → **Inputs** (yellow fill `#FFFFCC`, blue font, gray
-      borders). **This is the canary for the fill-pattern bug** — if the
-      cell has only borders and no yellow fill, the pattern is not being
-      set. See `CLAUDE.md` → Office.js gotchas.
-- [ ] Continue clicking → Good, Bad, Important, back to Normal.
+      borders).
+- [ ] Click again → **Good** (green `#C6EFCE`, dark green font `#006100`).
+      **This is the canary for the null-pattern match bug** — if you see
+      Good here, the fill-pattern null tolerance is working. If instead
+      the cell returns to Normal white, the match logic in
+      `core/cellFormatCycle.ts → doesFillMatch` has regressed.
+- [ ] Click again → **Bad** (red `#FFC7CE`, dark red font `#9C0006`).
+- [ ] Click again → **Important** (yellow `#FFFF00`, black bold, no
+      borders). **This is the canary for the border `color-on-None` bug**
+      — if the cell keeps a visible thin border that wasn't there on
+      Important, `applyBorderEdge` in `excelPortLive.ts` is setting color
+      on a `None` style and Office.js is upgrading the style back to
+      Continuous. Same fix as before: guard the `border.color` assignment.
+- [ ] Click again → wraps back to **Normal**.
+- [ ] Press **Ctrl+Z** repeatedly. Each undo step reverts one cycle step;
+      the whole trail back to the unfilled starting cell should undo
+      without any missing intermediate state.
 - [ ] Select a multi-cell range and cycle to "Inputs" → inside borders
       appear between cells, not only outside edges.
 

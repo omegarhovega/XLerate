@@ -61,6 +61,47 @@ describe("cycle cell format baseline parity", () => {
     expect(computeNextCellFormat(normalLike).name).toBe("Inputs");
   });
 
+  it("matches Normal when Excel reports fillPattern=null with fillColor=#FFFFFF (Desktop quirk)", () => {
+    // Excel Desktop returns fill.pattern as literal null after we set pattern=Solid + color=#FFFFFF.
+    // Without tolerating this, the cycle would get stuck on Normal forever.
+    const applied: SelectionCellFormatState = {
+      ...stateFromPreset(0),
+      fillPattern: null,
+      fillColor: "#FFFFFF",
+      edgeLeftStyle: "None",
+      edgeTopStyle: "None",
+      edgeBottomStyle: "None",
+      edgeRightStyle: "None"
+    };
+    expect(doesSelectionMatchCellFormat(applied, DEFAULT_CELL_FORMATS[0])).toBe(true);
+    expect(computeNextCellFormat(applied).name).toBe("Inputs");
+  });
+
+  it("matches Inputs when Excel reports fillPattern=null with colored fill (Desktop quirk, non-white)", () => {
+    // Same null-pattern quirk applies for non-white colors — if we only tolerated white,
+    // the cycle would oscillate between Normal and Inputs (never reaching Good/Bad/Important).
+    const inputs = DEFAULT_CELL_FORMATS[1];
+    const applied: SelectionCellFormatState = {
+      ...stateFromFormat(inputs),
+      fillPattern: null
+    };
+    expect(doesSelectionMatchCellFormat(applied, inputs)).toBe(true);
+    expect(computeNextCellFormat(applied).name).toBe("Good");
+  });
+
+  it("treats solid-white as equivalent to no-fill (null color) in both directions", () => {
+    const noFill: SelectionCellFormatState = {
+      ...stateFromPreset(0),
+      fillPattern: null,
+      fillColor: null,
+      edgeLeftStyle: null,
+      edgeTopStyle: null,
+      edgeBottomStyle: null,
+      edgeRightStyle: null
+    };
+    expect(doesSelectionMatchCellFormat(noFill, DEFAULT_CELL_FORMATS[0])).toBe(true);
+  });
+
   it("cycles to next preset when current one matches", () => {
     const current = stateFromPreset(1); // Inputs
     expect(computeNextCellFormat(current).name).toBe("Good");
