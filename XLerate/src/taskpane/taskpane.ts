@@ -1,10 +1,5 @@
 /* global Excel, Office */
-import {
-  classifyAutoColorGrid,
-  DEFAULT_AUTO_COLOR_PALETTE,
-  type AutoColorCell,
-  type AutoColorCategory
-} from "../core/autoColor";
+import { runAutoColor as runAutoColorService } from "../services/autoColor.service";
 import { VALUE_ERROR } from "../core/cagr";
 import { runCagrCalculator } from "../services/cagr.service";
 import {
@@ -50,7 +45,6 @@ const TEXT_STYLE_CYCLE_STATE_KEY = "xlerate_text_style_cycle_state_v1";
 const FORMAT_SETTINGS_EDITOR_ID = "format-settings-json";
 const TRACE_MAX_DEPTH_INPUT_ID = "trace-max-depth";
 const TRACE_RESULTS_TBODY_ID = "trace-results-body";
-const MAX_AUTO_COLOR_CELLS = 50000;
 const BORDER_SIDE_ITEMS = [
   "EdgeLeft",
   "EdgeTop",
@@ -833,82 +827,8 @@ async function runSaveFormatSettingsFromEditor(): Promise<void> {
 }
 
 async function runAutoColor(): Promise<void> {
-  await Excel.run(async (context) => {
-    const range = context.workbook.getSelectedRange();
-    range.load(["address", "rowCount", "columnCount", "formulas", "values", "numberFormat"]);
-    const hyperlinkProps = range.getCellProperties({ hyperlink: true });
-    await context.sync();
-
-    const totalCells = range.rowCount * range.columnCount;
-    if (totalCells > MAX_AUTO_COLOR_CELLS) {
-      setStatus(`Auto-color skipped: selection has ${totalCells} cells (limit: ${MAX_AUTO_COLOR_CELLS}).`);
-      return;
-    }
-
-    const formulas = range.formulas as CellFormula[][];
-    const values = range.values as CellValue[][];
-    const numberFormats = range.numberFormat as string[][];
-    const hyperlinkMatrix = hyperlinkProps.value;
-
-    const cells: AutoColorCell[][] = [];
-    for (let r = 0; r < range.rowCount; r += 1) {
-      cells[r] = [];
-      for (let c = 0; c < range.columnCount; c += 1) {
-        const hyperlink = hyperlinkMatrix[r][c]?.hyperlink;
-        const hasHyperlink = Boolean(hyperlink?.address || hyperlink?.documentReference || hyperlink?.textToDisplay);
-        cells[r][c] = {
-          formula: asFormulaCell(formulas[r][c]),
-          value: values[r][c],
-          numberFormat: numberFormats[r][c],
-          hasHyperlink
-        };
-      }
-    }
-
-    const categories = classifyAutoColorGrid(cells);
-    const updateMatrix = createCellPropertiesMatrix(range.rowCount, range.columnCount);
-    const counts: Record<Exclude<AutoColorCategory, "none">, number> = {
-      input: 0,
-      formula: 0,
-      worksheetLink: 0,
-      workbookLink: 0,
-      external: 0,
-      hyperlink: 0,
-      partialInput: 0
-    };
-
-    let changedCount = 0;
-    for (let r = 0; r < range.rowCount; r += 1) {
-      for (let c = 0; c < range.columnCount; c += 1) {
-        const category = categories[r][c];
-        if (category === "none") {
-          continue;
-        }
-
-        updateMatrix[r][c] = {
-          format: {
-            font: {
-              color: DEFAULT_AUTO_COLOR_PALETTE[category]
-            }
-          }
-        };
-        counts[category] += 1;
-        changedCount += 1;
-      }
-    }
-
-    if (changedCount === 0) {
-      setStatus(`Auto-color found no cells to color in ${range.address}.`);
-      return;
-    }
-
-    range.setCellProperties(updateMatrix);
-    await context.sync();
-
-    setStatus(
-      `Auto-color applied on ${range.address} (${changedCount} cells: input ${counts.input}, formula ${counts.formula}, partial ${counts.partialInput}).`
-    );
-  });
+  await runAutoColorService(new ExcelPortLive());
+  setStatus("Auto-color applied.");
 }
 
 async function runErrorWrap(): Promise<void> {
