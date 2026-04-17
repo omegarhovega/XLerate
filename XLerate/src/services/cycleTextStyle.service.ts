@@ -41,7 +41,7 @@ function styleToMutation(style: TextStyleDefinition): CellFormatMutation {
 export async function runCycleTextStyle(
   port: ExcelPort,
   currentIndex: number,
-  configuredStyles: TextStyleDefinition[] = DEFAULT_TEXT_STYLES,
+  configuredStyles: TextStyleDefinition[] = DEFAULT_TEXT_STYLES
 ): Promise<{ index: number; style: TextStyleDefinition }> {
   const snaps = await port.getSelectionFormatting();
   if (snaps.length === 0) {
