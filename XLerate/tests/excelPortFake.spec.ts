@@ -126,7 +126,7 @@ describe("ExcelPortFake", () => {
       numberFormat: "#,##0.00",
       fillColor: "#FFFF00",
       fontColor: "#0000FF",
-      fontBold: true
+      fontBold: true,
     });
     port.setSelection([addr(0, 0)]);
     const [snap] = await port.getSelectionFormatting();
@@ -172,10 +172,10 @@ describe("ExcelPortFake", () => {
           borders: {
             clearAll: true,
             top: { style: "Continuous", color: "#808080" },
-            bottom: { style: "Continuous", color: "#808080" }
-          }
-        }
-      }
+            bottom: { style: "Continuous", color: "#808080" },
+          },
+        },
+      },
     ]);
     port.setSelection([addr(0, 0)]);
     const [snap] = await port.getSelectionFormatting();
@@ -196,16 +196,16 @@ describe("ExcelPortFake", () => {
       edgeLeftStyle: "Continuous",
       edgeTopStyle: "Continuous",
       edgeBottomStyle: "Continuous",
-      edgeRightStyle: "Continuous"
+      edgeRightStyle: "Continuous",
     });
     await port.applyMutations([
       {
         address: addr(0, 0),
         kind: "formatBundle",
         format: {
-          borders: { clearAll: true, top: { style: "Double" } }
-        }
-      }
+          borders: { clearAll: true, top: { style: "Double" } },
+        },
+      },
     ]);
     port.setSelection([addr(0, 0)]);
     const [snap] = await port.getSelectionFormatting();

@@ -18,7 +18,10 @@ import { runCycleDateFormat as runCycleDateFormatService } from "../services/cyc
 import { runCycleCellFormat as runCycleCellFormatService } from "../services/cycleCellFormat.service";
 import { computeSmartFillRight, type SmartFillRow } from "../core/smartFillRight";
 import { ExcelPortLive } from "../adapters/excelPortLive";
-import { runClearConsistencyMarks } from "../services/clearConsistencyMarks.service";
+import {
+  runClearConsistencyMarks,
+  type ConsistencyMarkRestore
+} from "../services/clearConsistencyMarks.service";
 import { runErrorWrap as runErrorWrapService } from "../services/errorWrap.service";
 import { runSwitchSign as runSwitchSignService } from "../services/switchSign.service";
 import { runCycleTextStyle as runCycleTextStyleService } from "../services/cycleTextStyle.service";
@@ -684,17 +687,26 @@ async function runErrorWrap(): Promise<void> {
 }
 
 async function runClearConsistencyMarksHandler(): Promise<void> {
+  const state = readFormulaConsistencyState();
+  if (!state) {
+    setStatus("No consistency marks to clear.");
+    return;
+  }
+
   const confirmed = window.confirm("Clear all formula consistency marks on this sheet?");
   if (!confirmed) return;
 
-  const port = new ExcelPortLive();
-  const cells = await port.getSelectionCells();
-  const sheetName = cells[0]?.address?.sheet;
-  if (!sheetName) {
-    setStatus("No active sheet.");
-    return;
-  }
-  await runClearConsistencyMarks(port, sheetName);
+  const restores: ConsistencyMarkRestore[] = state.cells.map((entry) => ({
+    address: {
+      sheet: state.sheetName,
+      row: state.rowIndex + entry.rowOffset,
+      col: state.columnIndex + entry.colOffset
+    },
+    originalColor: entry.originalColor
+  }));
+
+  await runClearConsistencyMarks(new ExcelPortLive(), restores);
+  await clearFormulaConsistencyState();
   setStatus("Consistency marks cleared.");
 }
 

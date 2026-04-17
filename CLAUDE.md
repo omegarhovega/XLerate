@@ -68,4 +68,83 @@ Individual stages:
 - Performance budgets from the spec §5.4 — those are verified by manual
   profiling in Phase 3+.
 
-For those, sideload into Excel Desktop and verify by hand.
+For those, sideload into Excel Desktop and verify by hand. See
+`sideload-checklist.md` at the repo root for the per-feature manual test
+protocol. **Any change that touches `src/adapters/excelPortLive.ts` or a
+taskpane handler MUST go through that checklist before the work is
+considered done.** Contract tests prove your logic is correct against the
+fake; they cannot prove Office.js does what you assume.
+
+## Office.js gotchas we have hit (must-know before editing `excelPortLive.ts`)
+
+Each entry here is a real bug we shipped and then had to fix. If you are
+editing the live adapter, review this list first.
+
+### Fill: set pattern before color
+
+Setting `range.format.fill.color = "#..."` on a cell whose current pattern
+is `"None"` (the default for unformatted cells) does **not** reliably render
+a solid fill. Office.js requires the pattern to be set explicitly.
+
+```typescript
+// WRONG — fill will not render on a previously-unfilled cell
+cell.format.fill.color = "#FFFFCC";
+
+// RIGHT — pattern first, then color
+cell.format.fill.pattern = "Solid";
+cell.format.fill.color = "#FFFFCC";
+```
+
+In this codebase: `applyFillMutation` in `excelPortLive.ts` is the single
+chokepoint that must obey this rule. If you add a new fill-touching path,
+it must go through `applyFillMutation`. Clearing fills uses
+`cell.format.fill.clear()` which resets both pattern and color.
+
+### Reversible operations should store original state, not bulk-wipe
+
+When a feature applies visual state to cells it did not own (e.g. the
+formula-consistency check fills cells green/red), the "undo" path must
+restore each cell's *original* state — not bulk-clear everything on the
+sheet.
+
+- `sheet.getUsedRange(true).format.fill.clear()` nukes the user's own
+  formatting alongside ours. Never acceptable as a "clear marks" implementation.
+- Pattern we use: when the feature applies marks, it snapshots each affected
+  cell's previous state into `Office.context.document.settings` alongside
+  the addresses. The clear path reads that snapshot and emits per-cell
+  format mutations to restore each color.
+- See `runClearConsistencyMarks` in `src/services/` and the
+  `FormulaConsistencyState` / `FormulaConsistencyCellState` types in
+  `taskpane.ts` for the reference implementation.
+
+### Array-formula mutation is deferred
+
+`ExcelPortLive.applyMutations` explicitly throws on `kind: "arrayFormula"`
+with a "Phase 2" note. The pure core and the fake support array formulas
+correctly. Until someone implements `Range.setArrayFormula` plumbing, any
+array-formula cell routed through live Excel is an unhandled case.
+
+### `getUsedRange(true)` excludes formatted-only cells
+
+`valuesOnly=true` treats cells that have formatting but no value as empty.
+That's the default in our read paths and is usually correct. But if you're
+doing a cleanup pass over formatted-but-valueless cells, use
+`getUsedRange(false)` or iterate a specific address list.
+
+### Office.js property loading
+
+Every property you read needs to be loaded via `range.load([...])` or
+`format.load([...])` before `context.sync()`. Forgetting to load a property
+typically manifests as `undefined` in the snapshot rather than an error —
+which contract tests cannot catch because the fake doesn't have this
+two-phase API. If a snapshot field is mysteriously undefined in sideload,
+check the `load()` calls first.
+
+### When in doubt, compare against the old working code
+
+The pre-migration handlers in `taskpane.ts` (some still present as dead
+code) were battle-tested in live Excel. When adding or changing live
+behavior, find the old handler for the same feature and diff against it.
+If your new implementation skips a call the old one made (especially
+setting `fill.pattern`, clearing borders, or setting `font.underline` as a
+string), question whether the skip is safe.

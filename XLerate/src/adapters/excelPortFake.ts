@@ -3,7 +3,7 @@ import {
   CellFormattingSnapshot,
   CellMutation,
   CellSnapshot,
-  ExcelPort
+  ExcelPort,
 } from "./excelPort";
 
 type FakeCellState =
@@ -37,7 +37,7 @@ function defaultFormatting(): FakeCellFormatting {
     edgeLeftColor: null,
     edgeTopColor: null,
     edgeBottomColor: null,
-    edgeRightColor: null
+    edgeRightColor: null,
   };
 }
 
@@ -77,7 +77,7 @@ export class ExcelPortFake implements ExcelPort {
           isFormula: true,
           isArrayFormula: state.isArray,
           formula: state.formula,
-          value: undefined
+          value: undefined,
         };
       }
       if (state.kind === "value") {
@@ -86,7 +86,7 @@ export class ExcelPortFake implements ExcelPort {
           isFormula: false,
           isArrayFormula: false,
           formula: "",
-          value: state.value
+          value: state.value,
         };
       }
       return {
@@ -94,7 +94,7 @@ export class ExcelPortFake implements ExcelPort {
         isFormula: false,
         isArrayFormula: false,
         formula: "",
-        value: null
+        value: null,
       };
     });
   }
@@ -125,11 +125,20 @@ export class ExcelPortFake implements ExcelPort {
           patch.numberFormat = fmt.numberFormat;
         }
         if (fmt.fill) {
-          if (fmt.fill.pattern !== undefined) {
-            patch.fillPattern = fmt.fill.pattern;
-          }
-          if (fmt.fill.color !== undefined) {
-            patch.fillColor = fmt.fill.color;
+          // Mirror Excel.RangeFill.clear(): pattern "None" clears BOTH pattern
+          // and color, since the live adapter invokes fill.clear() for this
+          // case. Keeping the fake aligned prevents contract tests from
+          // disagreeing with live behavior.
+          if (fmt.fill.pattern === "None") {
+            patch.fillPattern = null;
+            patch.fillColor = null;
+          } else {
+            if (fmt.fill.pattern !== undefined) {
+              patch.fillPattern = fmt.fill.pattern;
+            }
+            if (fmt.fill.color !== undefined) {
+              patch.fillColor = fmt.fill.color;
+            }
           }
         }
         if (fmt.font) {
@@ -139,7 +148,8 @@ export class ExcelPortFake implements ExcelPort {
           if (fmt.font.bold !== undefined) patch.fontBold = fmt.font.bold;
           if (fmt.font.italic !== undefined) patch.fontItalic = fmt.font.italic;
           if (fmt.font.underline !== undefined) patch.fontUnderline = fmt.font.underline;
-          if (fmt.font.strikethrough !== undefined) patch.fontStrikethrough = fmt.font.strikethrough;
+          if (fmt.font.strikethrough !== undefined)
+            patch.fontStrikethrough = fmt.font.strikethrough;
         }
         if (fmt.borders) {
           if (fmt.borders.clearAll) {
@@ -162,11 +172,13 @@ export class ExcelPortFake implements ExcelPort {
           }
           if (fmt.borders.bottom) {
             patch.edgeBottomStyle = fmt.borders.bottom.style;
-            if (fmt.borders.bottom.color !== undefined) patch.edgeBottomColor = fmt.borders.bottom.color;
+            if (fmt.borders.bottom.color !== undefined)
+              patch.edgeBottomColor = fmt.borders.bottom.color;
           }
           if (fmt.borders.right) {
             patch.edgeRightStyle = fmt.borders.right.style;
-            if (fmt.borders.right.color !== undefined) patch.edgeRightColor = fmt.borders.right.color;
+            if (fmt.borders.right.color !== undefined)
+              patch.edgeRightColor = fmt.borders.right.color;
           }
         }
         this.setCellFormatting(m.address, patch);

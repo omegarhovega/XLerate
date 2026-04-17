@@ -12,7 +12,7 @@ import {
  */
 export async function runCycleDateFormat(
   port: ExcelPort,
-  configuredFormats: DateFormatDefinition[] = DEFAULT_DATE_FORMATS,
+  configuredFormats: DateFormatDefinition[] = DEFAULT_DATE_FORMATS
 ): Promise<void> {
   const snaps = await port.getSelectionFormatting();
   if (snaps.length === 0) return;

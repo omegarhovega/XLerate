@@ -18,6 +18,10 @@ describe("Cycle Cell Format contract (spec §3.8)", () => {
     port.setSelection([addr(0, 0)]);
     const [snap] = await port.getSelectionFormatting();
     expect(snap.fillColor).toBe("#FFFFFF");
+    // Pattern must be "Solid" so the color actually renders in Excel. The live
+    // adapter previously set only color without pattern, which does not produce
+    // a visible fill on a previously-unfilled cell in Office.js.
+    expect(snap.fillPattern).toBe("Solid");
     expect(snap.fontColor).toBe("#000000");
   });
 

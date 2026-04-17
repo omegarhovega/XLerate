@@ -8,7 +8,7 @@ import {
   CellSnapshot,
   ExcelPort,
   FillMutation,
-  FontMutation
+  FontMutation,
 } from "./excelPort";
 
 /**
@@ -37,7 +37,7 @@ export class ExcelPortLive implements ExcelPort {
           const address: CellAddress = {
             sheet: worksheet.name,
             row: range.rowIndex + r,
-            col: range.columnIndex + c
+            col: range.columnIndex + c,
           };
           const formulaText = typeof formula === "string" ? formula : "";
           const isFormula = formulaText.startsWith("=") || formulaText.startsWith("{=");
@@ -47,7 +47,7 @@ export class ExcelPortLive implements ExcelPort {
             isFormula,
             isArrayFormula,
             formula: isFormula ? formulaText : "",
-            value: isFormula ? undefined : value
+            value: isFormula ? undefined : value,
           });
         }
       }
@@ -58,7 +58,14 @@ export class ExcelPortLive implements ExcelPort {
   async getSelectionFormatting(): Promise<CellFormattingSnapshot[]> {
     return Excel.run(async (context) => {
       const range = context.workbook.getSelectedRange();
-      range.load(["rowCount", "columnCount", "rowIndex", "columnIndex", "numberFormat", "hyperlink"]);
+      range.load([
+        "rowCount",
+        "columnCount",
+        "rowIndex",
+        "columnIndex",
+        "numberFormat",
+        "hyperlink",
+      ]);
       const format = range.format;
       format.load(["fill/color", "fill/pattern"]);
       format.font.load(["name", "size", "color", "bold", "italic", "underline", "strikethrough"]);
@@ -67,7 +74,7 @@ export class ExcelPortLive implements ExcelPort {
         Excel.BorderIndex.edgeLeft,
         Excel.BorderIndex.edgeTop,
         Excel.BorderIndex.edgeBottom,
-        Excel.BorderIndex.edgeRight
+        Excel.BorderIndex.edgeRight,
       ];
       const edgeItems = edges.map((e) => borders.getItem(e));
       edgeItems.forEach((b) => b.load(["style", "color"]));
@@ -83,7 +90,7 @@ export class ExcelPortLive implements ExcelPort {
           const address: CellAddress = {
             sheet: worksheet.name,
             row: range.rowIndex + r,
-            col: range.columnIndex + c
+            col: range.columnIndex + c,
           };
           const numberFormatCell =
             Array.isArray(range.numberFormat) && Array.isArray(range.numberFormat[r])
@@ -116,7 +123,7 @@ export class ExcelPortLive implements ExcelPort {
             edgeLeftColor: edgeLeft.color ?? null,
             edgeTopColor: edgeTop.color ?? null,
             edgeBottomColor: edgeBottom.color ?? null,
-            edgeRightColor: edgeRight.color ?? null
+            edgeRightColor: edgeRight.color ?? null,
           });
         }
       }
@@ -146,7 +153,12 @@ export class ExcelPortLive implements ExcelPort {
       };
 
       for (const m of mutations) {
-        const cell = sheetFor(m.address.sheet).getRangeByIndexes(m.address.row, m.address.col, 1, 1);
+        const cell = sheetFor(m.address.sheet).getRangeByIndexes(
+          m.address.row,
+          m.address.col,
+          1,
+          1
+        );
         if (m.kind === "value") {
           cell.values = [[m.value as string | number | boolean | null]];
         } else if (m.kind === "formula") {
@@ -191,6 +203,10 @@ function applyFillMutation(cell: Excel.Range, fill: FillMutation): void {
     cell.format.fill.clear();
     return;
   }
+  // Order matters: Office.js requires pattern to be set for a color to render as a
+  // solid fill on a previously-unfilled cell. Setting color alone does not work
+  // reliably. Always set pattern first (when provided), then color.
+  if (fill.pattern !== undefined) cell.format.fill.pattern = fill.pattern;
   if (fill.color !== undefined) cell.format.fill.color = fill.color;
 }
 
@@ -209,7 +225,7 @@ function applyBordersMutation(cell: Excel.Range, borders: BordersMutation): void
       Excel.BorderIndex.edgeBottom,
       Excel.BorderIndex.edgeRight,
       Excel.BorderIndex.insideHorizontal,
-      Excel.BorderIndex.insideVertical
+      Excel.BorderIndex.insideVertical,
     ];
     for (const e of edges) cell.format.borders.getItem(e).style = "None";
   }
