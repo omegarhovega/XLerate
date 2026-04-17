@@ -35,6 +35,9 @@
     "core-js": "^3.36.0",
     "regenerator-runtime": "^0.14.1"
   },
+  "optionalDependencies": {
+    "@rolldown/binding-win32-x64-msvc": "^1.0.0-rc.16"
+  },
   "devDependencies": {
     "@babel/core": "^7.24.0",
     "@babel/preset-env": "^7.25.4",
