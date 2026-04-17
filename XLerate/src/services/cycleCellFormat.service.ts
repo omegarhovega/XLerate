@@ -61,7 +61,7 @@ function definitionToMutation(def: CellFormatDefinition): CellFormatMutation {
  */
 export async function runCycleCellFormat(
   port: ExcelPort,
-  configuredFormats: CellFormatDefinition[] = DEFAULT_CELL_FORMATS,
+  configuredFormats: CellFormatDefinition[] = DEFAULT_CELL_FORMATS
 ): Promise<void> {
   const snaps = await port.getSelectionFormatting();
   if (snaps.length === 0) return;
