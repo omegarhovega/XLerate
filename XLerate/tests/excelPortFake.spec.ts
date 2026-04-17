@@ -21,8 +21,8 @@ describe("ExcelPortFake", () => {
         isFormula: false,
         isArrayFormula: false,
         formula: "",
-        value: 42
-      }
+        value: 42,
+      },
     ]);
   });
 
@@ -36,8 +36,8 @@ describe("ExcelPortFake", () => {
         isFormula: true,
         isArrayFormula: false,
         formula: "=A1+B1",
-        value: undefined
-      }
+        value: undefined,
+      },
     ]);
   });
 
@@ -70,7 +70,9 @@ describe("ExcelPortFake", () => {
 
   it("applies array formula mutations with isArray flag", async () => {
     const port = new ExcelPortFake();
-    await port.applyMutations([{ address: addr(0, 0), kind: "arrayFormula", formula: "{=-(A1:A3*2)}" }]);
+    await port.applyMutations([
+      { address: addr(0, 0), kind: "arrayFormula", formula: "{=-(A1:A3*2)}" },
+    ]);
     port.setSelection([addr(0, 0)]);
     const [snap] = await port.getSelectionCells();
     expect(snap.isArrayFormula).toBe(true);
@@ -86,8 +88,8 @@ describe("ExcelPortFake", () => {
         isFormula: false,
         isArrayFormula: false,
         formula: "",
-        value: null
-      }
+        value: null,
+      },
     ]);
   });
 

@@ -15,7 +15,7 @@ export async function runSwitchSign(port: ExcelPort): Promise<void> {
       isFormula: cell.isFormula,
       isArrayFormula: cell.isArrayFormula,
       formula: cell.formula,
-      value: cell.value
+      value: cell.value,
     };
     const after = switchSignCell(before);
 
@@ -25,7 +25,7 @@ export async function runSwitchSign(port: ExcelPort): Promise<void> {
         mutations.push({
           address: cell.address,
           kind: after.isArrayFormula ? "arrayFormula" : "formula",
-          formula: newFormula
+          formula: newFormula,
         });
       }
       continue;
@@ -35,7 +35,7 @@ export async function runSwitchSign(port: ExcelPort): Promise<void> {
       mutations.push({
         address: cell.address,
         kind: "value",
-        value: after.value
+        value: after.value,
       });
     }
   }

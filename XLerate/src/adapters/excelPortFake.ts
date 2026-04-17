@@ -37,7 +37,7 @@ export class ExcelPortFake implements ExcelPort {
           isFormula: true,
           isArrayFormula: state.isArray,
           formula: state.formula,
-          value: undefined
+          value: undefined,
         };
       }
       if (state.kind === "value") {
@@ -46,7 +46,7 @@ export class ExcelPortFake implements ExcelPort {
           isFormula: false,
           isArrayFormula: false,
           formula: "",
-          value: state.value
+          value: state.value,
         };
       }
       return {
@@ -54,7 +54,7 @@ export class ExcelPortFake implements ExcelPort {
         isFormula: false,
         isArrayFormula: false,
         formula: "",
-        value: null
+        value: null,
       };
     });
   }

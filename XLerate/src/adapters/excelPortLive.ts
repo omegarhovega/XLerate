@@ -28,7 +28,7 @@ export class ExcelPortLive implements ExcelPort {
           const address: CellAddress = {
             sheet: worksheet.name,
             row: range.rowIndex + r,
-            col: range.columnIndex + c
+            col: range.columnIndex + c,
           };
           const formulaText = typeof formula === "string" ? formula : "";
           const isFormula = formulaText.startsWith("=") || formulaText.startsWith("{=");
@@ -38,7 +38,7 @@ export class ExcelPortLive implements ExcelPort {
             isFormula,
             isArrayFormula,
             formula: isFormula ? formulaText : "",
-            value: isFormula ? undefined : value
+            value: isFormula ? undefined : value,
           });
         }
       }
@@ -68,7 +68,12 @@ export class ExcelPortLive implements ExcelPort {
       };
 
       for (const m of mutations) {
-        const cell = sheetFor(m.address.sheet).getRangeByIndexes(m.address.row, m.address.col, 1, 1);
+        const cell = sheetFor(m.address.sheet).getRangeByIndexes(
+          m.address.row,
+          m.address.col,
+          1,
+          1
+        );
         if (m.kind === "value") {
           cell.values = [[m.value as string | number | boolean | null]];
         } else if (m.kind === "formula") {
