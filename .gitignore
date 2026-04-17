@@ -69,3 +69,6 @@ ts-port/
 
 # Office add-in webpack output
 XLerate/dist/
+
+# Docs
+docs/
