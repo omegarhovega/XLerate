@@ -21,7 +21,8 @@ import {
 } from "../core/formulaConsistency";
 import { computeNextNumberFormat, hasMixedNumberFormats } from "../core/numberFormatCycle";
 import { computeSmartFillRight, type SmartFillRow } from "../core/smartFillRight";
-import { switchSignCell } from "../core/switchSign";
+import { ExcelPortLive } from "../adapters/excelPortLive";
+import { runSwitchSign as runSwitchSignService } from "../services/switchSign.service";
 import {
   computeNextTextStyle,
   mapBorderWeight,
@@ -659,31 +660,8 @@ async function runSelectTraceAddress(fullAddress: string): Promise<void> {
 }
 
 async function runSwitchSign(): Promise<void> {
-  await Excel.run(async (context) => {
-    const range = context.workbook.getSelectedRange();
-    range.load(["formulas", "values", "rowCount", "columnCount"]);
-    await context.sync();
-
-    const updated: CellFormula[][] = [];
-    for (let r = 0; r < range.rowCount; r += 1) {
-      updated[r] = [];
-      for (let c = 0; c < range.columnCount; c += 1) {
-        const rawFormula = range.formulas[r][c] as CellFormula;
-        const formula = asFormulaCell(rawFormula);
-        const value = range.values[r][c] as CellValue;
-        const result = switchSignCell({
-          isFormula: formula !== null,
-          formula: formula ?? undefined,
-          value: formula === null ? value : undefined
-        });
-        updated[r][c] = result.isFormula ? (result.formula as string) : (result.value as CellFormula);
-      }
-    }
-
-    range.formulas = updated as unknown as string[][];
-    await context.sync();
-    setStatus("Switch Sign applied.");
-  });
+  await runSwitchSignService(new ExcelPortLive());
+  setStatus("Switch Sign applied.");
 }
 
 async function runCycleNumberFormat(): Promise<void> {
