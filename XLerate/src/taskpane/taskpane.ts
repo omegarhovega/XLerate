@@ -12,7 +12,6 @@ import {
   type SelectionCellFormatState
 } from "../core/cellFormatCycle";
 import { computeNextDateFormat, hasMixedDateFormats } from "../core/dateFormatCycle";
-import { wrapFormulaWithError } from "../core/errorWrap";
 import { FORMAT_SETTINGS_KEY, resolveFormatSettings, type ResolvedFormatSettings } from "../core/formatSettings";
 import {
   analyzeHorizontalFormulaConsistency,
@@ -22,6 +21,7 @@ import {
 import { computeNextNumberFormat, hasMixedNumberFormats } from "../core/numberFormatCycle";
 import { computeSmartFillRight, type SmartFillRow } from "../core/smartFillRight";
 import { ExcelPortLive } from "../adapters/excelPortLive";
+import { runErrorWrap as runErrorWrapService } from "../services/errorWrap.service";
 import { runSwitchSign as runSwitchSignService } from "../services/switchSign.service";
 import {
   computeNextTextStyle,
@@ -911,26 +911,9 @@ async function runAutoColor(): Promise<void> {
 }
 
 async function runErrorWrap(): Promise<void> {
-  await Excel.run(async (context) => {
-    const fallbackInput = (document.getElementById("error-value") as HTMLInputElement | null)?.value?.trim() || "NA()";
-    const range = context.workbook.getSelectedRange();
-    range.load(["formulas", "rowCount", "columnCount"]);
-    await context.sync();
-
-    const updated: CellFormula[][] = [];
-    for (let r = 0; r < range.rowCount; r += 1) {
-      updated[r] = [];
-      for (let c = 0; c < range.columnCount; c += 1) {
-        const rawFormula = range.formulas[r][c] as CellFormula;
-        const formula = asFormulaCell(rawFormula);
-        updated[r][c] = formula ? wrapFormulaWithError(formula, fallbackInput) : rawFormula;
-      }
-    }
-
-    range.formulas = updated as unknown as string[][];
-    await context.sync();
-    setStatus(`Error Wrap applied with fallback "${fallbackInput}".`);
-  });
+  const fallbackInput = (document.getElementById("error-value") as HTMLInputElement | null)?.value?.trim() || "NA()";
+  await runErrorWrapService(new ExcelPortLive(), fallbackInput);
+  setStatus(`Error Wrap applied with fallback "${fallbackInput}".`);
 }
 
 function toSmartFillRows(values: CellValue[][], formulas: CellFormula[][]): SmartFillRow[] {
