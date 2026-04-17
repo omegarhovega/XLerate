@@ -5,7 +5,8 @@ import {
   type AutoColorCell,
   type AutoColorCategory
 } from "../core/autoColor";
-import { calculateCagr, VALUE_ERROR } from "../core/cagr";
+import { VALUE_ERROR } from "../core/cagr";
+import { runCagrCalculator } from "../services/cagr.service";
 import {
   computeNextCellFormat,
   type CellFormatDefinition,
@@ -1005,7 +1006,7 @@ async function runCagr(): Promise<void> {
       }
     }
 
-    const result = calculateCagr(values);
+    const result = runCagrCalculator(values);
     if (result === VALUE_ERROR) {
       setCagrResult(VALUE_ERROR);
       setStatus("CAGR returned #VALUE! based on baseline rules.");
