@@ -72,3 +72,6 @@ XLerate/dist/
 
 # Docs
 specs/
+
+# Plans (local-only implementation plans)
+plans/
