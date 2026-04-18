@@ -121,10 +121,21 @@ body {
 
 .trace-row-clickable {
   cursor: pointer;
+  outline: none;
 }
 
 .trace-row-clickable:hover {
   background: #f5f9ff;
+}
+
+/* Applied by the taskpane's keyboard-nav helper when a trace row is the
+   current arrow-key target. Intentionally class-driven (not :focus) so the
+   ring is visible even when the taskpane iframe doesn't currently hold the
+   document's focus — lets the user see where ↑/↓/Enter will land the moment
+   they Alt+F6 or click into the taskpane. */
+.trace-row-clickable.trace-row-focused {
+  background: #e6fbf8;
+  box-shadow: inset 0 0 0 2px #00f2da;
 }
 
 .trace-link-btn {
