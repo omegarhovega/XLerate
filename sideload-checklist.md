@@ -167,6 +167,34 @@ Not yet migrated through the harness (Phase 3+). If you do touch this:
 - [ ] Clicking a node jumps Excel's selection to that cell.
 - [ ] Active cell has no precedents → tree shows only the root.
 
+**Keyboard navigation (Phase A of the trace-navigation plan):**
+
+- [ ] Run Trace Precedents against a cell with several known precedents.
+      Row 0 has a visible cyan ring (`.trace-row-focused`); other rows
+      do not. Hovering the tbody shows the aria-label tooltip with
+      shortcut guidance in browsers that surface it.
+- [ ] Click anywhere inside the taskpane (to give it document focus).
+      Press **ArrowDown** — ring moves to row 1. **ArrowDown** to the
+      last row; **ArrowDown** once more → ring stays on the last row
+      (no wrap).
+- [ ] **ArrowUp** past row 0 → ring stays on row 0 (no wrap).
+- [ ] **Home** jumps ring to row 0. **End** jumps to the last row.
+- [ ] **Enter** on the focused row → Excel scrolls to and selects that
+      cell. The ring stays on the same row in the taskpane, so
+      ArrowDown then Enter navigates cleanly down the chain.
+- [ ] **Esc** → ring disappears; subsequent arrow keys in the taskpane
+      do not bring it back until a new trace is run or a row is clicked.
+- [ ] Click a non-first row with the mouse. Ring moves to the clicked
+      row. Next **ArrowDown** advances from there, not from row 0.
+- [ ] Re-run Trace Precedents on a different active cell. Ring resets
+      to the new row 0.
+- [ ] Run a trace that returns zero results → tbody shows the "No
+      trace results." row; arrow keys do nothing; no error in the
+      taskpane status.
+- [ ] Sanity: Tab away from the taskpane and back. Tab order lands on
+      the focused row (thanks to tabindex=0), not on the inner link
+      button (which is tabindex=-1).
+
 ---
 
 ## When something fails
