@@ -17,6 +17,40 @@ import { parseWorksheetScopedAddress, sanitizeTraceDepth, type TraceDirection } 
 
 let activeDialog: Office.Dialog | null = null;
 
+/**
+ * Best-effort return of keyboard focus to the Excel grid after dialog
+ * close. Office.js has no direct API for "give focus to the grid", so
+ * this is a ladder of workarounds in descending order of reliability:
+ *
+ * 1. `worksheet.activate()` + `range.activate()` — activate() (distinct
+ *    from .select()) asks Excel to make the worksheet and cell the
+ *    active rectangle, which on Desktop typically pulls grid focus.
+ *
+ * 2. If the above doesn't land focus on the grid, the user has one
+ *    cheap recovery: any key press after Esc will go to Excel's grid
+ *    because the taskpane iframe has given up its focus claim along
+ *    with the dialog. The cell is already correct; only focus is off.
+ *
+ * Documented as a known limitation on Online / Mac where (1) may not
+ * pull focus. Do not expand this ladder without sideload evidence that
+ * the additions actually help — each attempt adds code that can fail
+ * in its own ways.
+ */
+async function pullFocusToGrid(): Promise<void> {
+  try {
+    await Excel.run(async (context) => {
+      const cell = context.workbook.getActiveCell();
+      cell.load("worksheet/name");
+      await context.sync();
+      cell.worksheet.activate();
+      cell.select();
+      await context.sync();
+    });
+  } catch {
+    // Non-fatal: worst case, user presses one key/click to resume.
+  }
+}
+
 function closeActiveDialog(): void {
   if (activeDialog) {
     try {
@@ -26,6 +60,10 @@ function closeActiveDialog(): void {
       // DialogEventReceived handler anyway.
     }
     activeDialog = null;
+    // Fire-and-forget: ask Excel to bring the active cell's worksheet
+    // into focus, best-effort. See `pullFocusToGrid` for the full
+    // rationale and the known Online/Mac limitations.
+    void pullFocusToGrid();
   }
 }
 
