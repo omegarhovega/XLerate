@@ -57,7 +57,23 @@ function getRowElements(): HTMLTableRowElement[] {
   return Array.from(body.querySelectorAll<HTMLTableRowElement>(`tr[${ROW_INDEX_ATTR}]`));
 }
 
-function focusRow(targetIndex: number): void {
+/**
+ * Fire-and-forget notification to the taskpane. `messageParent` is
+ * synchronous on the dialog side — the dialog's window state isn't
+ * affected and the caller doesn't need to await anything. No await, no
+ * throw propagation: if messaging fails we still want the ring to move.
+ */
+function sendToParent(message: { action: "navigate"; address: string } | { action: "close" }): void {
+  try {
+    Office.context.ui.messageParent(JSON.stringify(message));
+  } catch {
+    // Intentionally swallow. A failed messageParent is usually "no parent
+    // attached yet" during the very first render; the next keystroke will
+    // re-send. Surfacing the error to the user would be noise.
+  }
+}
+
+function focusRow(targetIndex: number, options: { announce?: boolean } = {}): void {
   const elements = getRowElements();
   if (elements.length === 0) {
     currentFocusIndex = null;
@@ -72,6 +88,15 @@ function focusRow(targetIndex: number): void {
   const target = elements[clamped];
   target.focus();
   target.scrollIntoView({ block: "nearest" });
+
+  // Live-nav: tell the taskpane to move Excel's active cell. Skipped on the
+  // initial render (announce: false) because the dialog opens on the user's
+  // current active cell anyway, and firing before the taskpane has attached
+  // its DialogMessageReceived handler would just be lost.
+  if (options.announce !== false) {
+    const row = currentRows[clamped];
+    if (row) sendToParent({ action: "navigate", address: row.address });
+  }
 }
 
 function handleDialogKeydown(event: KeyboardEvent): void {
@@ -94,9 +119,11 @@ function handleDialogKeydown(event: KeyboardEvent): void {
       event.preventDefault();
       focusRow(currentRows.length - 1);
       break;
-    // Enter and Escape are reserved for the live-nav / close protocol in B.5.
-    // Intentionally unhandled here — the dialog's X button still closes via
-    // Office.js DialogEventReceived on the parent.
+    case "Enter":
+    case "Escape":
+      event.preventDefault();
+      sendToParent({ action: "close" });
+      break;
     default:
       break;
   }
@@ -163,7 +190,12 @@ function renderDialogTraceRows(rows: TraceRow[]): void {
   // Dialog always claims focus when opened, so this .focus() reliably lands
   // visible focus on row 0 — unlike the taskpane version where the iframe
   // might not have document focus. Arrow keys work immediately.
-  focusRow(0);
+  //
+  // announce:false on the initial call — the dialog opens on the user's
+  // current active cell, so Excel's selection already matches row 0.
+  // Firing a navigate here would be redundant AND risks losing the message
+  // to a race with the parent's DialogMessageReceived handler attachment.
+  focusRow(0, { announce: false });
 }
 
 async function runDialogTrace(params: DialogParams): Promise<void> {

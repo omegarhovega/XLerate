@@ -535,6 +535,12 @@ async function openTraceDialog(direction: TraceDirection): Promise<void> {
         return;
       }
       activeTraceDialog = result.value;
+      // Attach handlers synchronously so the dialog's first messageParent
+      // (once it renders) isn't lost to a race.
+      activeTraceDialog.addEventHandler(
+        Office.EventType.DialogMessageReceived,
+        handleTraceDialogMessage
+      );
       activeTraceDialog.addEventHandler(Office.EventType.DialogEventReceived, () => {
         // User closed the dialog (X button) or the host disposed it.
         activeTraceDialog = null;
@@ -542,6 +548,61 @@ async function openTraceDialog(direction: TraceDirection): Promise<void> {
       setStatus(`Trace ${direction} dialog opened${startAddress ? ` for ${startAddress}` : ""}.`);
     }
   );
+}
+
+/**
+ * Parsed shape of the dialog's messageParent payloads. Anything else is
+ * ignored — an add-in dialog receives only messages we chose to send, but
+ * defensive parsing is cheap insurance against future protocol drift.
+ */
+type TraceDialogMessage = { action: "navigate"; address: string } | { action: "close" };
+
+function parseTraceDialogMessage(raw: unknown): TraceDialogMessage | null {
+  if (typeof raw !== "string") return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const obj = parsed as { action?: unknown; address?: unknown };
+  if (obj.action === "navigate" && typeof obj.address === "string" && obj.address.length > 0) {
+    return { action: "navigate", address: obj.address };
+  }
+  if (obj.action === "close") {
+    return { action: "close" };
+  }
+  return null;
+}
+
+function handleTraceDialogMessage(arg: {
+  message?: string;
+  origin?: string | undefined;
+} | { error: number }): void {
+  if (!("message" in arg) || typeof arg.message !== "string") return;
+  const parsed = parseTraceDialogMessage(arg.message);
+  if (!parsed) return;
+
+  if (parsed.action === "navigate") {
+    // Live-nav: the dialog has moved its focus to `address`; mirror that on
+    // the Excel grid. Fire-and-forget; we don't gate the next message on
+    // this completing. runSelectTraceAddress already handles cross-sheet
+    // resolution and missing-sheet errors.
+    void guardedRun(() => runSelectTraceAddress(parsed.address));
+    return;
+  }
+
+  if (parsed.action === "close") {
+    if (activeTraceDialog) {
+      try {
+        activeTraceDialog.close();
+      } catch {
+        // Already closed; nothing to do.
+      }
+      activeTraceDialog = null;
+    }
+  }
 }
 
 async function runSelectTraceAddress(fullAddress: string): Promise<void> {
