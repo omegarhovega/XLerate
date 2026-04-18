@@ -143,22 +143,52 @@ if (border.style !== "None") {
 `setRangeBorder` helper in `taskpane.ts` had the same guard — it's a
 well-known Office.js surface bug, not something we discovered.
 
-### Reversible operations should store original state, not bulk-wipe
+### `Office.context.document.settings.saveAsync` breaks the Excel undo chain — never call it in a cell-mutating handler
+
+On Excel Desktop (WebView2 and COM add-in hosts), `saveAsync` commits an
+out-of-band workbook save that isn't part of Excel's native undo model.
+If your handler does this:
+
+```typescript
+await Excel.run(async (context) => { /* ... mutate cells ... */ });
+await saveDocumentSettingsAsync(); // <-- THIS IS THE TRAP
+```
+
+...then the first time the user clicks anywhere on the sheet after the
+handler finishes, Excel flushes its pending undo boundary and the
+`Excel.run` mutations become unreachable via Ctrl+Z. This is unlikely to
+reproduce in contract tests (the fake port has no undo model), so it will
+only be caught in sideload.
+
+**The rule:** `saveAsync` is reserved for handlers that do **not** also
+mutate cells in the same invocation — the Format Settings editor's Save
+and Reset buttons are the only legitimate callers in this codebase.
+
+Do not reintroduce persistent state for features like formula-consistency
+marks, cycle indices, or any "pending operation" state. Session-only
+module variables (see `textStyleCycleIndex`) or state inferred from the
+cells themselves (see `runCycleCellFormatService`, which reads current
+formatting instead of tracking an index) are the right alternatives. If
+you genuinely need persistence across a close/reopen, the feature needs
+to accept that Ctrl+Z won't cover it — design for that, don't split the
+difference.
+
+### Reversible operations — prefer Ctrl+Z, not a restore snapshot
 
 When a feature applies visual state to cells it did not own (e.g. the
-formula-consistency check fills cells green/red), the "undo" path must
-restore each cell's *original* state — not bulk-clear everything on the
-sheet.
+formula-consistency check fills cells green/red), prefer the single Excel
+undo step as the "remove" path. Do not snapshot original state via
+`document.settings` — that's the gotcha above.
 
-- `sheet.getUsedRange(true).format.fill.clear()` nukes the user's own
-  formatting alongside ours. Never acceptable as a "clear marks" implementation.
-- Pattern we use: when the feature applies marks, it snapshots each affected
-  cell's previous state into `Office.context.document.settings` alongside
-  the addresses. The clear path reads that snapshot and emits per-cell
-  format mutations to restore each color.
-- See `runClearConsistencyMarks` in `src/services/` and the
-  `FormulaConsistencyState` / `FormulaConsistencyCellState` types in
-  `taskpane.ts` for the reference implementation.
+If Ctrl+Z is insufficient for your use case, the feature needs a redesign
+discussion, not a settings-backed workaround. The historical approach
+(snapshot cells into `Office.context.document.settings`, then restore
+from the snapshot) shipped and was removed precisely because the save
+step broke the undo chain and row/column insertions invalidated the
+stored addresses. See spec §3.5 / §3.6.
+
+Still true: never bulk-wipe with `sheet.getUsedRange(true).format.fill.clear()` —
+that nukes user formatting alongside ours.
 
 ### Array-formula mutation is deferred
 

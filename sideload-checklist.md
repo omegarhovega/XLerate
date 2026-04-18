@@ -73,19 +73,30 @@ Verify these once per session. They apply to every feature.
 - [ ] Break one formula (e.g. `=C$9*Z10`). Re-run.
 - [ ] The broken cell gets a **red** fill; its neighbours stay green
       relative to each other.
-- [ ] Close and reopen the workbook → marks persist.
+- [ ] **Undo chain preservation test** — with marks visible, **click any
+      other cell on the sheet** (to shift selection). Then press Ctrl+Z
+      **once**. All green/red fills revert; originally-unfilled cells
+      are unfilled, originally-yellow cells are yellow. If Ctrl+Z does
+      nothing, or only partially reverts, we've regressed the undo chain —
+      check that the handler no longer calls `saveAsync` (see CLAUDE.md
+      "saveAsync breaks the Excel undo chain").
+- [ ] After a successful Ctrl+Z, press Ctrl+Y → marks reappear in one redo step.
+- [ ] Close the workbook without undoing. Reopen → the green/red fills are
+      still there (they are regular cell fills now). There is **no Clear
+      button**; to wipe them the user must either undo (if undo hasn't
+      been flushed) or clear fills manually.
 
-### Clear Consistency Marks (spec §3.6)
+### Format Settings Save / Reset (spec §3.14 / §3.15)
 
-- [ ] Apply consistency marks (above). Confirm you can see them.
-- [ ] Click **Clear Consistency Marks** → confirm dialog appears.
-- [ ] Click Cancel → nothing changes.
-- [ ] Click again and confirm → marks are gone, **original fill colors are
-      restored** (set a yellow fill on one cell before marking, then
-      confirm the yellow comes back).
-- [ ] Cells you did not mark are unchanged (try setting a blue fill on a
-      nearby cell before clearing — it must stay blue).
-- [ ] Ctrl+Z → marks reappear.
+- [ ] Edit a preset in the Format Settings JSON editor → click **Save
+      Format Settings**. Cycle that format type; the edited preset is used.
+- [ ] Click **Reset Format Settings (Defaults)** → editor textarea
+      repopulates with built-in defaults, status says "Format settings
+      reset to defaults."
+- [ ] Text-style cycle index resets (next Cycle Text Style click starts at
+      the first preset, not where it was).
+- [ ] Note: these actions DO call `saveAsync`, which is expected because
+      they don't also mutate cells; the undo chain is not at risk here.
 
 ### Smart Fill Right (spec §3.4)
 

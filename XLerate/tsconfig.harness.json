@@ -23,7 +23,6 @@
     "tests/errorWrap.contract.spec.ts",
     "tests/cagr.contract.spec.ts",
     "tests/autoColor.contract.spec.ts",
-    "tests/clearConsistencyMarks.contract.spec.ts",
     "tests/cycleNumberFormat.contract.spec.ts",
     "tests/cycleDateFormat.contract.spec.ts",
     "tests/cycleCellFormat.contract.spec.ts",

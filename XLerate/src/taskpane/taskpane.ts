@@ -18,10 +18,6 @@ import { runCycleDateFormat as runCycleDateFormatService } from "../services/cyc
 import { runCycleCellFormat as runCycleCellFormatService } from "../services/cycleCellFormat.service";
 import { computeSmartFillRight, type SmartFillRow } from "../core/smartFillRight";
 import { ExcelPortLive } from "../adapters/excelPortLive";
-import {
-  runClearConsistencyMarks,
-  type ConsistencyMarkRestore
-} from "../services/clearConsistencyMarks.service";
 import { runErrorWrap as runErrorWrapService } from "../services/errorWrap.service";
 import { runSwitchSign as runSwitchSignService } from "../services/switchSign.service";
 import { runCycleTextStyle as runCycleTextStyleService } from "../services/cycleTextStyle.service";
@@ -40,9 +36,6 @@ type CellFormula = string | number | boolean;
 type CellValue = string | number | boolean | null;
 const CONSISTENT_COLOR = "#00F2DA";
 const INCONSISTENT_COLOR = "#FF0000";
-const FORMULA_CONSISTENCY_STATE_KEY = "xlerate_formula_consistency_state_v1";
-const CELL_FORMAT_CYCLE_STATE_KEY = "xlerate_cell_format_cycle_state_v1";
-const TEXT_STYLE_CYCLE_STATE_KEY = "xlerate_text_style_cycle_state_v1";
 const FORMAT_SETTINGS_EDITOR_ID = "format-settings-json";
 const TRACE_MAX_DEPTH_INPUT_ID = "trace-max-depth";
 const TRACE_RESULTS_TBODY_ID = "trace-results-body";
@@ -54,29 +47,12 @@ const BORDER_SIDE_ITEMS = [
 ] as const;
 type BorderSideItem = (typeof BORDER_SIDE_ITEMS)[number];
 
-type FormulaConsistencyCellState = {
-  rowOffset: number;
-  colOffset: number;
-  originalColor: string | null;
-};
-
-type FormulaConsistencyState = {
-  sheetName: string;
-  rangeAddress: string;
-  rowIndex: number;
-  columnIndex: number;
-  rowCount: number;
-  columnCount: number;
-  cells: FormulaConsistencyCellState[];
-};
-
-type CellFormatCycleState = {
-  sheetName: string;
-  rangeAddress: string;
-  lastIndex: number;
-};
-
 // Session-scoped per spec §4.2 — not persisted across workbook reopens.
+// Persisting cycle state via Office.context.document.settings.saveAsync would
+// break the native Excel undo chain on Desktop (any click on the sheet after
+// the cycle flushes the undo boundary), so we deliberately keep cycle
+// position in memory only. The cell-format cycle infers position from the
+// current cell's formatting and does not need an index at all.
 let textStyleCycleIndex = -1;
 
 type TraceRow = {
@@ -194,11 +170,17 @@ function toFormulaConsistencyRows(formulasR1C1: CellFormula[][]): FormulaConsist
 }
 
 function applyConsistencyColor(cell: Excel.Range, mark: FormulaConsistencyMark): void {
-  if (mark === "consistent") {
-    cell.format.fill.color = CONSISTENT_COLOR;
-  } else if (mark === "inconsistent") {
-    cell.format.fill.color = INCONSISTENT_COLOR;
-  }
+  const color =
+    mark === "consistent"
+      ? CONSISTENT_COLOR
+      : mark === "inconsistent"
+        ? INCONSISTENT_COLOR
+        : null;
+  if (color === null) return;
+  // Office.js requires fill.pattern to be set before color renders reliably
+  // on a previously-unfilled cell. See CLAUDE.md "Office.js gotchas".
+  cell.format.fill.pattern = "Solid";
+  cell.format.fill.color = color;
 }
 
 function makeFormatMatrix(rowCount: number, columnCount: number, formatCode: string): string[][] {
@@ -309,31 +291,14 @@ function applyCellFormatToRange(range: Excel.Range, format: CellFormatDefinition
   }
 }
 
-function readFormulaConsistencyState(): FormulaConsistencyState | null {
-  const raw = Office.context.document.settings.get(FORMULA_CONSISTENCY_STATE_KEY);
-  if (typeof raw !== "string" || raw.length === 0) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as FormulaConsistencyState;
-    if (
-      typeof parsed.sheetName !== "string" ||
-      typeof parsed.rangeAddress !== "string" ||
-      typeof parsed.rowIndex !== "number" ||
-      typeof parsed.columnIndex !== "number" ||
-      typeof parsed.rowCount !== "number" ||
-      typeof parsed.columnCount !== "number" ||
-      !Array.isArray(parsed.cells)
-    ) {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
+// Office.context.document.settings.saveAsync breaks the native Excel undo
+// chain on Desktop: any click on the sheet after a sequence of
+// Excel.run mutations + saveAsync flushes the undo boundary so Ctrl+Z no
+// longer reverses the mutations. We therefore use saveAsync ONLY for
+// settings-editor actions that the user explicitly commits (Save / Reset
+// Format Settings) and NEVER in handlers that also mutate cells in the
+// same click. The Format Settings editor is the only feature that
+// persists to document settings.
 function saveDocumentSettingsAsync(): Promise<void> {
   return new Promise((resolve, reject) => {
     Office.context.document.settings.saveAsync((result) => {
@@ -346,42 +311,6 @@ function saveDocumentSettingsAsync(): Promise<void> {
   });
 }
 
-async function writeFormulaConsistencyState(state: FormulaConsistencyState): Promise<void> {
-  Office.context.document.settings.set(FORMULA_CONSISTENCY_STATE_KEY, JSON.stringify(state));
-  await saveDocumentSettingsAsync();
-}
-
-async function clearFormulaConsistencyState(): Promise<void> {
-  Office.context.document.settings.remove(FORMULA_CONSISTENCY_STATE_KEY);
-  await saveDocumentSettingsAsync();
-}
-
-function readCellFormatCycleState(): CellFormatCycleState | null {
-  const raw = Office.context.document.settings.get(CELL_FORMAT_CYCLE_STATE_KEY);
-  if (typeof raw !== "string" || raw.length === 0) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as CellFormatCycleState;
-    if (
-      typeof parsed.sheetName !== "string" ||
-      typeof parsed.rangeAddress !== "string" ||
-      typeof parsed.lastIndex !== "number"
-    ) {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-async function writeCellFormatCycleState(state: CellFormatCycleState): Promise<void> {
-  Office.context.document.settings.set(CELL_FORMAT_CYCLE_STATE_KEY, JSON.stringify(state));
-  await saveDocumentSettingsAsync();
-}
-
 function readResolvedFormatSettings(): ResolvedFormatSettings {
   const raw = Office.context.document.settings.get(FORMAT_SETTINGS_KEY);
   return resolveFormatSettings(raw);
@@ -389,48 +318,14 @@ function readResolvedFormatSettings(): ResolvedFormatSettings {
 
 async function clearFormatSettingsAndCycleState(): Promise<void> {
   Office.context.document.settings.remove(FORMAT_SETTINGS_KEY);
-  Office.context.document.settings.remove(CELL_FORMAT_CYCLE_STATE_KEY);
-  Office.context.document.settings.remove(TEXT_STYLE_CYCLE_STATE_KEY);
   await saveDocumentSettingsAsync();
+  textStyleCycleIndex = -1;
 }
 
 async function writeFormatSettingsAndResetCycleState(settings: ResolvedFormatSettings): Promise<void> {
   Office.context.document.settings.set(FORMAT_SETTINGS_KEY, JSON.stringify(settings));
-  Office.context.document.settings.remove(CELL_FORMAT_CYCLE_STATE_KEY);
-  Office.context.document.settings.remove(TEXT_STYLE_CYCLE_STATE_KEY);
   await saveDocumentSettingsAsync();
-}
-
-async function restoreFormulaConsistencyState(
-  context: Excel.RequestContext,
-  state: FormulaConsistencyState
-): Promise<{ restoredCells: number; sheetMissing: boolean }> {
-  const worksheet = context.workbook.worksheets.getItemOrNullObject(state.sheetName);
-  worksheet.load("isNullObject");
-  await context.sync();
-
-  if (worksheet.isNullObject) {
-    return { restoredCells: 0, sheetMissing: true };
-  }
-
-  const target = worksheet.getRangeByIndexes(
-    state.rowIndex,
-    state.columnIndex,
-    Math.max(1, state.rowCount),
-    Math.max(1, state.columnCount)
-  );
-
-  for (const entry of state.cells) {
-    const cell = target.getCell(entry.rowOffset, entry.colOffset);
-    if (!entry.originalColor) {
-      cell.format.fill.clear();
-    } else {
-      cell.format.fill.color = entry.originalColor;
-    }
-  }
-
-  await context.sync();
-  return { restoredCells: state.cells.length, sheetMissing: false };
+  textStyleCycleIndex = -1;
 }
 
 function isItemNotFoundError(error: unknown): boolean {
@@ -686,30 +581,6 @@ async function runErrorWrap(): Promise<void> {
   setStatus(`Error Wrap applied with fallback "${fallbackInput}".`);
 }
 
-async function runClearConsistencyMarksHandler(): Promise<void> {
-  const state = readFormulaConsistencyState();
-  if (!state) {
-    setStatus("No consistency marks to clear.");
-    return;
-  }
-
-  const confirmed = window.confirm("Clear all formula consistency marks on this sheet?");
-  if (!confirmed) return;
-
-  const restores: ConsistencyMarkRestore[] = state.cells.map((entry) => ({
-    address: {
-      sheet: state.sheetName,
-      row: state.rowIndex + entry.rowOffset,
-      col: state.columnIndex + entry.colOffset
-    },
-    originalColor: entry.originalColor
-  }));
-
-  await runClearConsistencyMarks(new ExcelPortLive(), restores);
-  await clearFormulaConsistencyState();
-  setStatus("Consistency marks cleared.");
-}
-
 function toSmartFillRows(values: CellValue[][], formulas: CellFormula[][]): SmartFillRow[] {
   return values.map((rowValues, r) =>
     rowValues.map((value, c) => {
@@ -813,87 +684,41 @@ async function runCagr(): Promise<void> {
 }
 
 async function runFormulaConsistency(): Promise<void> {
+  // Single-shot apply: green/red fills for consistent/inconsistent formula
+  // cells. No persistent state — Ctrl+Z reverses the action in one step, and
+  // the previously-persisted restore-state broke Excel's undo chain on
+  // Desktop (see CLAUDE.md Office.js gotchas).
   await Excel.run(async (context) => {
     const range = context.workbook.getSelectedRange();
-    const worksheet = range.worksheet;
-    range.load(["formulasR1C1", "rowCount", "columnCount", "address", "rowIndex", "columnIndex"]);
-    worksheet.load("name");
+    range.load(["formulasR1C1", "rowCount", "columnCount", "address"]);
     await context.sync();
-
-    const existingState = readFormulaConsistencyState();
-    if (existingState) {
-      const restoreResult = await restoreFormulaConsistencyState(context, existingState);
-      await clearFormulaConsistencyState();
-
-      if (existingState.sheetName === worksheet.name) {
-        if (restoreResult.sheetMissing) {
-          setStatus("Formula Consistency toggle off: previous sheet no longer exists.");
-        } else {
-          setStatus(
-            `Formula Consistency formatting restored on ${existingState.rangeAddress} (${restoreResult.restoredCells} cells).`
-          );
-        }
-        return;
-      }
-    }
 
     const rows = toFormulaConsistencyRows(range.formulasR1C1 as CellFormula[][]);
     const marks = analyzeHorizontalFormulaConsistency(rows);
-    const changedCells: Array<{ row: number; col: number; mark: FormulaConsistencyMark; cell: Excel.Range }> = [];
 
     let consistentCount = 0;
     let inconsistentCount = 0;
+    let applied = false;
 
     for (let r = 0; r < range.rowCount; r += 1) {
       for (let c = 0; c < range.columnCount; c += 1) {
         const mark = marks[r][c];
-        if (mark === "none") {
-          continue;
-        }
-
-        const cell = range.getCell(r, c);
-        cell.format.fill.load("color");
-        changedCells.push({ row: r, col: c, mark, cell });
-
-        if (mark === "consistent") {
-          consistentCount += 1;
-        } else {
-          inconsistentCount += 1;
-        }
+        if (mark === "none") continue;
+        applyConsistencyColor(range.getCell(r, c), mark);
+        applied = true;
+        if (mark === "consistent") consistentCount += 1;
+        else inconsistentCount += 1;
       }
     }
 
-    if (changedCells.length === 0) {
+    if (!applied) {
       setStatus(`Formula Consistency found no formula cells to mark in ${range.address}.`);
       return;
     }
 
     await context.sync();
-
-    const stateCells: FormulaConsistencyCellState[] = [];
-    for (const item of changedCells) {
-      const originalColor = item.cell.format.fill.color;
-      stateCells.push({
-        rowOffset: item.row,
-        colOffset: item.col,
-        originalColor: typeof originalColor === "string" && originalColor.length > 0 ? originalColor : null
-      });
-      applyConsistencyColor(item.cell, item.mark);
-    }
-
-    await context.sync();
-    await writeFormulaConsistencyState({
-      sheetName: worksheet.name,
-      rangeAddress: range.address,
-      rowIndex: range.rowIndex,
-      columnIndex: range.columnIndex,
-      rowCount: range.rowCount,
-      columnCount: range.columnCount,
-      cells: stateCells
-    });
-
     setStatus(
-      `Formula Consistency applied on ${range.address} (consistent: ${consistentCount}, inconsistent: ${inconsistentCount}).`
+      `Formula Consistency applied on ${range.address} (consistent: ${consistentCount}, inconsistent: ${inconsistentCount}). Ctrl+Z to remove.`
     );
   });
 }
@@ -960,8 +785,5 @@ Office.onReady((info) => {
   document
     .getElementById("run-formula-consistency")
     ?.addEventListener("click", () => guardedRun(runFormulaConsistency));
-  document
-    .getElementById("clearConsistencyMarks")
-    ?.addEventListener("click", () => guardedRun(runClearConsistencyMarksHandler));
   document.getElementById("run-cagr")?.addEventListener("click", () => guardedRun(runCagr));
 });
