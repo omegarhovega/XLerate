@@ -105,6 +105,115 @@ function getTraceMaxDepthInputValue(): number {
   return sanitizeTraceDepth(Number(input.value));
 }
 
+// Keyboard-navigation state for the trace results table.
+// `currentTraceRows` mirrors what's rendered so key handlers can look up
+// addresses without re-reading the DOM. `currentTraceFocusIndex` tracks the
+// row that arrow keys operate on — null means "no list focus" (post-Esc or
+// empty results).
+let currentTraceRows: TraceRow[] = [];
+let currentTraceFocusIndex: number | null = null;
+const TRACE_ROW_FOCUSED_CLASS = "trace-row-focused";
+const TRACE_ROW_INDEX_ATTR = "data-trace-index";
+
+function getTraceRowElements(): HTMLTableRowElement[] {
+  const body = document.getElementById(TRACE_RESULTS_TBODY_ID);
+  if (!(body instanceof HTMLTableSectionElement)) return [];
+  return Array.from(body.querySelectorAll<HTMLTableRowElement>(`tr[${TRACE_ROW_INDEX_ATTR}]`));
+}
+
+function focusTraceRow(targetIndex: number): void {
+  const elements = getTraceRowElements();
+  if (elements.length === 0) {
+    currentTraceFocusIndex = null;
+    return;
+  }
+  const clamped = Math.max(0, Math.min(elements.length - 1, targetIndex));
+  elements.forEach((el, i) => {
+    el.classList.toggle(TRACE_ROW_FOCUSED_CLASS, i === clamped);
+    el.setAttribute("aria-selected", i === clamped ? "true" : "false");
+  });
+  currentTraceFocusIndex = clamped;
+  const target = elements[clamped];
+  // .focus() is silent if the taskpane iframe doesn't currently have
+  // document focus (e.g. right after running trace from the Excel grid).
+  // That's OK — the .trace-row-focused class still renders the ring so the
+  // user can see where Enter will land once they click/Alt+F6 into the pane.
+  target.focus();
+  target.scrollIntoView({ block: "nearest" });
+}
+
+function clearTraceFocus(): void {
+  currentTraceFocusIndex = null;
+  for (const el of getTraceRowElements()) {
+    el.classList.remove(TRACE_ROW_FOCUSED_CLASS);
+    el.setAttribute("aria-selected", "false");
+  }
+}
+
+function handleTraceKeydown(event: KeyboardEvent): void {
+  if (currentTraceRows.length === 0) return;
+  const focusIndex = currentTraceFocusIndex ?? 0;
+  switch (event.key) {
+    case "ArrowDown":
+      event.preventDefault();
+      focusTraceRow(focusIndex + 1);
+      break;
+    case "ArrowUp":
+      event.preventDefault();
+      focusTraceRow(focusIndex - 1);
+      break;
+    case "Home":
+      event.preventDefault();
+      focusTraceRow(0);
+      break;
+    case "End":
+      event.preventDefault();
+      focusTraceRow(currentTraceRows.length - 1);
+      break;
+    case "Enter": {
+      event.preventDefault();
+      const row = currentTraceRows[focusIndex];
+      if (row) {
+        void guardedRun(() => runSelectTraceAddress(row.address));
+      }
+      break;
+    }
+    case "Escape":
+      event.preventDefault();
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      clearTraceFocus();
+      break;
+    default:
+      // Don't preventDefault — let unrelated keys (Tab, shortcuts) through.
+      break;
+  }
+}
+
+function handleTraceFocusIn(event: FocusEvent): void {
+  // Fired when a row (or an element inside it, e.g. the link button) gains
+  // focus. Sync our in-memory index with whichever row is now the focus target
+  // so subsequent arrow keys continue from there, not from row 0.
+  const eventTarget = event.target;
+  if (!(eventTarget instanceof Element)) return;
+  const row = eventTarget.closest(`tr[${TRACE_ROW_INDEX_ATTR}]`);
+  if (!(row instanceof HTMLTableRowElement)) return;
+  const raw = row.getAttribute(TRACE_ROW_INDEX_ATTR);
+  const idx = raw === null ? NaN : Number(raw);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= currentTraceRows.length) return;
+  if (currentTraceFocusIndex !== idx) {
+    focusTraceRow(idx);
+  }
+}
+
+function wireTraceListKeyboard(): void {
+  const body = document.getElementById(TRACE_RESULTS_TBODY_ID);
+  if (!(body instanceof HTMLTableSectionElement)) return;
+  body.addEventListener("keydown", handleTraceKeydown);
+  body.addEventListener("focusin", handleTraceFocusIn);
+}
+
 function renderTraceRows(rows: TraceRow[]): void {
   const body = document.getElementById(TRACE_RESULTS_TBODY_ID);
   if (!(body instanceof HTMLTableSectionElement)) {
@@ -112,6 +221,9 @@ function renderTraceRows(rows: TraceRow[]): void {
   }
 
   body.textContent = "";
+  currentTraceRows = rows;
+  currentTraceFocusIndex = null;
+
   if (rows.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
@@ -122,9 +234,14 @@ function renderTraceRows(rows: TraceRow[]): void {
     return;
   }
 
-  for (const item of rows) {
+  rows.forEach((item, index) => {
     const row = document.createElement("tr");
     row.className = "trace-row-clickable";
+    row.setAttribute("role", "option");
+    row.setAttribute("tabindex", "0");
+    row.setAttribute(TRACE_ROW_INDEX_ATTR, String(index));
+    row.setAttribute("aria-selected", "false");
+
     const level = document.createElement("td");
     const address = document.createElement("td");
     const value = document.createElement("td");
@@ -135,6 +252,9 @@ function renderTraceRows(rows: TraceRow[]): void {
     addressBtn.type = "button";
     addressBtn.className = "trace-link-btn";
     addressBtn.textContent = item.address;
+    // The row itself is the keyboard target; the inner button shouldn't steal
+    // tab focus away from the listbox navigation pattern.
+    addressBtn.tabIndex = -1;
     address.appendChild(addressBtn);
     value.textContent = item.value;
     formula.textContent = item.formula;
@@ -150,7 +270,12 @@ function renderTraceRows(rows: TraceRow[]): void {
 
     row.append(level, address, value, formula);
     body.appendChild(row);
-  }
+  });
+
+  // Auto-select row 0 so the user sees where Enter will land and can arrow
+  // from there. Programmatic .focus() is a no-op when the taskpane lacks
+  // document focus, but the class-driven ring still renders.
+  focusTraceRow(0);
 }
 
 function asFormulaCell(cell: CellFormula): string | null {
@@ -747,6 +872,7 @@ Office.onReady((info) => {
   }
 
   setFormatSettingsEditorText(stringifyFormatSettings(readResolvedFormatSettings()));
+  wireTraceListKeyboard();
 
   document
     .getElementById("load-format-settings")
