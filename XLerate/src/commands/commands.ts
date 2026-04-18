@@ -1,35 +1,37 @@
-/*
- * Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT license.
- * See LICENSE in the project root for license information.
- */
-
 /* global Office */
 
+import { openTraceDialog } from "../taskpane/traceDialogLauncher";
+
 Office.onReady(() => {
-  // If needed, Office.js is ready to be called.
+  // Office.js is ready; no eager work required. Ribbon buttons invoke the
+  // `Office.actions.associate`d functions below when the user clicks them.
 });
 
 /**
- * Shows a notification when the add-in command is executed.
- * @param event
+ * Ribbon → Trace Precedents (Dialog). Opens the trace dialog pre-populated
+ * with the active cell's precedent tree; the dialog lives in a separate
+ * window from this commands runtime, and the messageParent→navigate
+ * protocol is wired inside `openTraceDialog`.
+ *
+ * IMPORTANT: every Office.actions.associate'd function MUST call
+ * event.completed() before returning (even on error), or Office.js keeps
+ * the ribbon button in a "busy" state.
  */
-function action(event: Office.AddinCommands.Event) {
-  const message: Office.NotificationMessageDetails = {
-    type: Office.MailboxEnums.ItemNotificationMessageType.InformationalMessage,
-    message: "Performed action.",
-    icon: "Icon.80x80",
-    persistent: true,
-  };
-
-  // Show a notification message.
-  Office.context.mailbox.item.notificationMessages.replaceAsync(
-    "ActionPerformanceNotification",
-    message
-  );
-
-  // Be sure to indicate when the add-in command function is complete.
-  event.completed();
+async function runOpenTracePrecedentsDialog(event: Office.AddinCommands.Event): Promise<void> {
+  try {
+    await openTraceDialog("precedents");
+  } finally {
+    event.completed();
+  }
 }
 
-// Register the function with Office.
-Office.actions.associate("action", action);
+async function runOpenTraceDependentsDialog(event: Office.AddinCommands.Event): Promise<void> {
+  try {
+    await openTraceDialog("dependents");
+  } finally {
+    event.completed();
+  }
+}
+
+Office.actions.associate("openTracePrecedentsDialog", runOpenTracePrecedentsDialog);
+Office.actions.associate("openTraceDependentsDialog", runOpenTraceDependentsDialog);

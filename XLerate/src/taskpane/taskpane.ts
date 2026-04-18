@@ -32,6 +32,7 @@ import {
   loadTraceCellProperties,
   snapshotRangeForTrace,
 } from "./traceExcelNeighbors";
+import { openTraceDialog } from "./traceDialogLauncher";
 
 type CellFormula = string | number | boolean;
 type CellValue = string | number | boolean | null;
@@ -488,121 +489,9 @@ async function runTraceDependents(): Promise<void> {
   await runTrace("dependents");
 }
 
-// Phase B.2 scaffolding. Later phases (B.3+) populate the dialog with a
-// trace + keyboard nav + messageParent protocol; B.6 replaces the temp
-// taskpane buttons with a ribbon entry. For now this just verifies that
-// the dialog page loads, Office.js binds inside it, and the taskpane can
-// receive lifecycle events.
-let activeTraceDialog: Office.Dialog | null = null;
-
-async function openTraceDialog(direction: TraceDirection): Promise<void> {
-  // Read the active cell so the dialog knows where to start (plumbed via
-  // query params; not used by the skeleton but will be in B.3).
-  let startAddress = "";
-  try {
-    await Excel.run(async (context) => {
-      const cell = context.workbook.getActiveCell();
-      cell.load("address");
-      await context.sync();
-      startAddress = cell.address;
-    });
-  } catch {
-    // Non-fatal: the dialog skeleton works without an address.
-  }
-
-  const url = new URL("traceDialog.html", window.location.href);
-  url.searchParams.set("direction", direction);
-  if (startAddress) url.searchParams.set("address", startAddress);
-  url.searchParams.set("maxDepth", String(getTraceMaxDepthInputValue()));
-
-  // Close any existing dialog first — Office.js only allows one add-in
-  // dialog open at a time per host; opening a second throws otherwise.
-  if (activeTraceDialog) {
-    try {
-      activeTraceDialog.close();
-    } catch {
-      // Ignore; dialog may already be closed.
-    }
-    activeTraceDialog = null;
-  }
-
-  Office.context.ui.displayDialogAsync(
-    url.toString(),
-    { height: 60, width: 40, displayInIframe: true },
-    (result) => {
-      if (result.status !== Office.AsyncResultStatus.Succeeded) {
-        setStatus(`Failed to open trace dialog: ${result.error.message}`);
-        return;
-      }
-      activeTraceDialog = result.value;
-      // Attach handlers synchronously so the dialog's first messageParent
-      // (once it renders) isn't lost to a race.
-      activeTraceDialog.addEventHandler(
-        Office.EventType.DialogMessageReceived,
-        handleTraceDialogMessage
-      );
-      activeTraceDialog.addEventHandler(Office.EventType.DialogEventReceived, () => {
-        // User closed the dialog (X button) or the host disposed it.
-        activeTraceDialog = null;
-      });
-      setStatus(`Trace ${direction} dialog opened${startAddress ? ` for ${startAddress}` : ""}.`);
-    }
-  );
-}
-
-/**
- * Parsed shape of the dialog's messageParent payloads. Anything else is
- * ignored — an add-in dialog receives only messages we chose to send, but
- * defensive parsing is cheap insurance against future protocol drift.
- */
-type TraceDialogMessage = { action: "navigate"; address: string } | { action: "close" };
-
-function parseTraceDialogMessage(raw: unknown): TraceDialogMessage | null {
-  if (typeof raw !== "string") return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (!parsed || typeof parsed !== "object") return null;
-  const obj = parsed as { action?: unknown; address?: unknown };
-  if (obj.action === "navigate" && typeof obj.address === "string" && obj.address.length > 0) {
-    return { action: "navigate", address: obj.address };
-  }
-  if (obj.action === "close") {
-    return { action: "close" };
-  }
-  return null;
-}
-
-function handleTraceDialogMessage(arg: {
-  message?: string;
-  origin?: string | undefined;
-} | { error: number }): void {
-  if (!("message" in arg) || typeof arg.message !== "string") return;
-  const parsed = parseTraceDialogMessage(arg.message);
-  if (!parsed) return;
-
-  if (parsed.action === "navigate") {
-    // Live-nav: the dialog has moved its focus to `address`; mirror that on
-    // the Excel grid. Fire-and-forget; we don't gate the next message on
-    // this completing. runSelectTraceAddress already handles cross-sheet
-    // resolution and missing-sheet errors.
-    void guardedRun(() => runSelectTraceAddress(parsed.address));
-    return;
-  }
-
-  if (parsed.action === "close") {
-    if (activeTraceDialog) {
-      try {
-        activeTraceDialog.close();
-      } catch {
-        // Already closed; nothing to do.
-      }
-      activeTraceDialog = null;
-    }
-  }
+async function openTraceDialogFromTaskpane(direction: TraceDirection): Promise<void> {
+  await openTraceDialog(direction, { maxDepth: getTraceMaxDepthInputValue() });
+  setStatus(`Trace ${direction} dialog opened.`);
 }
 
 async function runSelectTraceAddress(fullAddress: string): Promise<void> {
@@ -903,13 +792,12 @@ Office.onReady((info) => {
   document
     .getElementById("run-trace-dependents")
     ?.addEventListener("click", () => guardedRun(runTraceDependents));
-  // TEMP: Phase B.2 dev shim. Replaced by ribbon hotkey in B.6.
   document
     .getElementById("run-trace-dialog-precedents")
-    ?.addEventListener("click", () => guardedRun(() => openTraceDialog("precedents")));
+    ?.addEventListener("click", () => guardedRun(() => openTraceDialogFromTaskpane("precedents")));
   document
     .getElementById("run-trace-dialog-dependents")
-    ?.addEventListener("click", () => guardedRun(() => openTraceDialog("dependents")));
+    ?.addEventListener("click", () => guardedRun(() => openTraceDialogFromTaskpane("dependents")));
   document
     .getElementById("run-cycle-number-format")
     ?.addEventListener("click", () => guardedRun(runCycleNumberFormat));
