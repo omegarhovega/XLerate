@@ -1,17 +1,14 @@
-/* global Excel, Office */
+/* global Office */
 
-import { buildTrace, type TraceCellInfo, type TraceRow } from "../core/traceBuilder";
-import { sanitizeTraceDepth, type TraceDirection } from "../core/traceUtils";
-import {
-  getDirectTraceNeighbors,
-  loadTraceCellProperties,
-  resolveTraceStartCell,
-  snapshotRangeForTrace,
-} from "./traceExcelNeighbors";
+import type { TraceRow } from "../core/traceBuilder";
 
-// Phase B.3: the dialog computes its own trace and renders the list.
-// Keyboard focus-nav (B.4) and messageParent protocol (B.5) land next.
-// This file has its own Excel.run context, independent of the taskpane's.
+// Phase B (revised): dialogs in Office add-ins cannot call Excel.run —
+// https://learn.microsoft.com/en-us/office/dev/add-ins/develop/dialog-api-in-office-add-ins
+// documents the restriction ("cannot use host-specific APIs like Excel.run
+// or Word.run to interact with the host document"). So this file is pure
+// UI: it receives the pre-computed trace rows from the parent runtime
+// (taskpane or commands) via DialogParentMessageReceived, renders them,
+// handles keyboard navigation, and sends back navigate / close messages.
 
 const BODY_ID = "trace-dialog-body";
 const STATUS_ID = "trace-dialog-status";
@@ -20,8 +17,8 @@ const ROW_INDEX_ATTR = "data-trace-index";
 const ROW_FOCUSED_CLASS = "trace-row-focused";
 
 // Keyboard-navigation state. `currentRows` mirrors what's rendered;
-// `currentFocusIndex` is the row that arrow keys operate on. Both are
-// module-level: the dialog is single-trace, single-window.
+// `currentFocusIndex` is the row that arrow keys operate on. Module-level:
+// the dialog is single-trace, single-window.
 let currentRows: TraceRow[] = [];
 let currentFocusIndex: number | null = null;
 
@@ -35,20 +32,10 @@ function setDialogTitle(message: string): void {
   if (el) el.textContent = message;
 }
 
-type DialogParams = {
-  direction: TraceDirection;
-  address: string | null;
-  maxDepth: number;
-};
-
-function parseDialogParams(): DialogParams {
+function readDirectionFromUrl(): "precedents" | "dependents" {
   const params = new URLSearchParams(window.location.search);
-  const rawDirection = params.get("direction");
-  const direction: TraceDirection = rawDirection === "dependents" ? "dependents" : "precedents";
-  const address = params.get("address");
-  const depthRaw = params.get("maxDepth");
-  const maxDepth = sanitizeTraceDepth(depthRaw === null ? undefined : Number(depthRaw));
-  return { direction, address: address && address.length > 0 ? address : null, maxDepth };
+  const raw = params.get("direction");
+  return raw === "dependents" ? "dependents" : "precedents";
 }
 
 function getRowElements(): HTMLTableRowElement[] {
@@ -58,18 +45,21 @@ function getRowElements(): HTMLTableRowElement[] {
 }
 
 /**
- * Fire-and-forget notification to the taskpane. `messageParent` is
+ * Fire-and-forget notification to the parent runtime. `messageParent` is
  * synchronous on the dialog side — the dialog's window state isn't
- * affected and the caller doesn't need to await anything. No await, no
- * throw propagation: if messaging fails we still want the ring to move.
+ * affected and the caller doesn't need to await anything.
  */
-function sendToParent(message: { action: "navigate"; address: string } | { action: "close" }): void {
+function sendToParent(
+  message:
+    | { action: "ready" }
+    | { action: "navigate"; address: string }
+    | { action: "close" }
+): void {
   try {
     Office.context.ui.messageParent(JSON.stringify(message));
   } catch {
-    // Intentionally swallow. A failed messageParent is usually "no parent
-    // attached yet" during the very first render; the next keystroke will
-    // re-send. Surfacing the error to the user would be noise.
+    // Intentionally swallow. Most likely "parent not listening yet"; the
+    // next keystroke (or re-open) re-sends.
   }
 }
 
@@ -89,10 +79,10 @@ function focusRow(targetIndex: number, options: { announce?: boolean } = {}): vo
   target.focus();
   target.scrollIntoView({ block: "nearest" });
 
-  // Live-nav: tell the taskpane to move Excel's active cell. Skipped on the
-  // initial render (announce: false) because the dialog opens on the user's
-  // current active cell anyway, and firing before the taskpane has attached
-  // its DialogMessageReceived handler would just be lost.
+  // Live-nav: tell the parent to move Excel's active cell. Skipped on the
+  // initial render because the dialog opens on the user's current active
+  // cell anyway — redundant AND would fire before the parent has a chance
+  // to listen on the very first frame.
   if (options.announce !== false) {
     const row = currentRows[clamped];
     if (row) sendToParent({ action: "navigate", address: row.address });
@@ -187,55 +177,70 @@ function renderDialogTraceRows(rows: TraceRow[]): void {
     body.appendChild(tr);
   });
 
-  // Dialog always claims focus when opened, so this .focus() reliably lands
-  // visible focus on row 0 — unlike the taskpane version where the iframe
-  // might not have document focus. Arrow keys work immediately.
-  //
-  // announce:false on the initial call — the dialog opens on the user's
-  // current active cell, so Excel's selection already matches row 0.
-  // Firing a navigate here would be redundant AND risks losing the message
-  // to a race with the parent's DialogMessageReceived handler attachment.
   focusRow(0, { announce: false });
 }
 
-async function runDialogTrace(params: DialogParams): Promise<void> {
-  setDialogTitle(`Trace ${params.direction}`);
-  setDialogStatus(params.address ? `Tracing ${params.direction} from ${params.address}…` : `Tracing ${params.direction}…`);
+/**
+ * Payload shapes sent by the parent via dialog.messageChild. Kept
+ * permissive; unknown actions are ignored.
+ */
+type ParentToDialog =
+  | {
+      action: "setRows";
+      rows: TraceRow[];
+      direction: "precedents" | "dependents";
+      startAddress: string;
+      truncated?: boolean;
+    }
+  | { action: "error"; message: string };
 
+function parseParentMessage(raw: unknown): ParentToDialog | null {
+  if (typeof raw !== "string") return null;
+  let parsed: unknown;
   try {
-    await Excel.run(async (context) => {
-      const rootRange = await resolveTraceStartCell(context, params.address);
-      if (!rootRange) {
-        setDialogStatus("Could not resolve a starting cell for the trace.");
-        return;
-      }
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const obj = parsed as { action?: unknown };
+  if (obj.action === "setRows") {
+    const msg = parsed as Record<string, unknown>;
+    if (!Array.isArray(msg.rows)) return null;
+    const direction = msg.direction === "dependents" ? "dependents" : "precedents";
+    return {
+      action: "setRows",
+      rows: msg.rows as TraceRow[],
+      direction,
+      startAddress: typeof msg.startAddress === "string" ? msg.startAddress : "",
+      truncated: msg.truncated === true,
+    };
+  }
+  if (obj.action === "error") {
+    const msg = parsed as { message?: unknown };
+    return { action: "error", message: typeof msg.message === "string" ? msg.message : "Unknown error" };
+  }
+  return null;
+}
 
-      const root = snapshotRangeForTrace(rootRange);
+function handleParentMessage(arg: { message?: string } | { error: number }): void {
+  if (!("message" in arg) || typeof arg.message !== "string") return;
+  const parsed = parseParentMessage(arg.message);
+  if (!parsed) return;
 
-      const getNeighbors = async (info: TraceCellInfo): Promise<TraceCellInfo[]> => {
-        const worksheet = context.workbook.worksheets.getItem(info.worksheetName);
-        const cell = worksheet.getRangeByIndexes(info.rowIndex, info.columnIndex, 1, 1);
-        // resolveTraceStartCell/getDirectTraceNeighbors do their own loads; the
-        // ephemeral cell above only needs to exist to call getDirectPrecedents/Dependents.
-        loadTraceCellProperties(cell);
-        const neighbors = await getDirectTraceNeighbors(context, cell, params.direction);
-        return neighbors.map(snapshotRangeForTrace);
-      };
+  if (parsed.action === "setRows") {
+    setDialogTitle(`Trace ${parsed.direction}`);
+    renderDialogTraceRows(parsed.rows);
+    const count = parsed.rows.length;
+    const noun = count === 1 ? "cell" : "cells";
+    const addrPart = parsed.startAddress ? ` on ${parsed.startAddress}` : "";
+    const truncPart = parsed.truncated ? " (truncated)" : "";
+    setDialogStatus(`Trace ${parsed.direction}${addrPart}: ${count} ${noun}${truncPart}.`);
+    return;
+  }
 
-      const { rows, truncated } = await buildTrace({
-        root,
-        maxDepth: params.maxDepth,
-        getNeighbors,
-      });
-
-      renderDialogTraceRows(rows);
-      setDialogStatus(
-        `Trace ${params.direction} on ${root.address}: ${rows.length} cell${rows.length === 1 ? "" : "s"}${truncated ? " (truncated)" : ""}.`
-      );
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    setDialogStatus(`Trace failed: ${message}`);
+  if (parsed.action === "error") {
+    setDialogStatus(`Trace failed: ${parsed.message}`);
   }
 }
 
@@ -244,7 +249,18 @@ Office.onReady((info) => {
     setDialogStatus("Trace dialog requires Excel.");
     return;
   }
+
+  setDialogTitle(`Trace ${readDirectionFromUrl()}`);
   wireDialogKeyboard();
-  const params = parseDialogParams();
-  void runDialogTrace(params);
+
+  // Register parent→dialog listener FIRST, then signal ready. The parent
+  // computes the trace (Excel.run is not available inside this dialog) and
+  // pushes rows via dialog.messageChild once it sees our ready signal.
+  Office.context.ui.addHandlerAsync(
+    Office.EventType.DialogParentMessageReceived,
+    handleParentMessage,
+    () => {
+      sendToParent({ action: "ready" });
+    }
+  );
 });
