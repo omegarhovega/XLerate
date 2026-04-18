@@ -27,6 +27,11 @@ import {
   type TraceDirection,
 } from "../core/traceUtils";
 import { buildTrace, type TraceCellInfo, type TraceRow } from "../core/traceBuilder";
+import {
+  getDirectTraceNeighbors,
+  loadTraceCellProperties,
+  snapshotRangeForTrace,
+} from "./traceExcelNeighbors";
 
 type CellFormula = string | number | boolean;
 type CellValue = string | number | boolean | null;
@@ -442,84 +447,6 @@ async function writeFormatSettingsAndResetCycleState(settings: ResolvedFormatSet
   textStyleCycleIndex = -1;
 }
 
-function isItemNotFoundError(error: unknown): boolean {
-  if (!error || typeof error !== "object") {
-    return false;
-  }
-
-  const maybe = error as { code?: unknown; message?: unknown };
-  if (maybe.code === "ItemNotFound") {
-    return true;
-  }
-  return typeof maybe.message === "string" && maybe.message.includes("ItemNotFound");
-}
-
-async function getDirectTraceNeighbors(
-  context: Excel.RequestContext,
-  source: Excel.Range,
-  direction: TraceDirection
-): Promise<Excel.Range[]> {
-  const links =
-    direction === "precedents" ? source.getDirectPrecedents() : source.getDirectDependents();
-  links.areas.load("items");
-
-  try {
-    await context.sync();
-  } catch (error) {
-    if (isItemNotFoundError(error)) {
-      return [];
-    }
-    throw error;
-  }
-
-  for (const bySheet of links.areas.items) {
-    bySheet.areas.load("items/address,rowIndex,columnIndex,rowCount,columnCount,worksheet/name,values,formulas");
-  }
-  await context.sync();
-
-  const neighbors: Excel.Range[] = [];
-  let expanded = false;
-
-  for (const bySheet of links.areas.items) {
-    for (const area of bySheet.areas.items) {
-      if (area.rowCount === 1 && area.columnCount === 1) {
-        neighbors.push(area);
-        continue;
-      }
-
-      for (let r = 0; r < area.rowCount; r += 1) {
-        for (let c = 0; c < area.columnCount; c += 1) {
-          const cell = area.getCell(r, c);
-          cell.load(["address", "worksheet/name", "rowIndex", "columnIndex", "values", "formulas"]);
-          neighbors.push(cell);
-          expanded = true;
-        }
-      }
-    }
-  }
-
-  if (expanded) {
-    await context.sync();
-  }
-
-  return neighbors;
-}
-
-/**
- * Snapshot a loaded Excel.Range into a plain TraceCellInfo for the pure
- * builder. Assumes address / worksheet/name / rowIndex / columnIndex /
- * values / formulas have already been loaded on the caller's context.
- */
-function snapshotRangeForTrace(cell: Excel.Range): TraceCellInfo {
-  return {
-    worksheetName: cell.worksheet.name,
-    rowIndex: cell.rowIndex,
-    columnIndex: cell.columnIndex,
-    address: cell.address,
-    value: cell.values,
-    formula: cell.formulas,
-  };
-}
 
 async function runTrace(direction: TraceDirection): Promise<void> {
   if (!Office.context.requirements.isSetSupported("ExcelApi", "1.12")) {
@@ -529,7 +456,7 @@ async function runTrace(direction: TraceDirection): Promise<void> {
 
   await Excel.run(async (context) => {
     const rootRange = context.workbook.getActiveCell();
-    rootRange.load(["address", "worksheet/name", "rowIndex", "columnIndex", "values", "formulas"]);
+    loadTraceCellProperties(rootRange);
     await context.sync();
 
     const root = snapshotRangeForTrace(rootRange);
@@ -586,6 +513,7 @@ async function openTraceDialog(direction: TraceDirection): Promise<void> {
   const url = new URL("traceDialog.html", window.location.href);
   url.searchParams.set("direction", direction);
   if (startAddress) url.searchParams.set("address", startAddress);
+  url.searchParams.set("maxDepth", String(getTraceMaxDepthInputValue()));
 
   // Close any existing dialog first — Office.js only allows one add-in
   // dialog open at a time per host; opening a second throws otherwise.
