@@ -195,6 +195,76 @@ Not yet migrated through the harness (Phase 3+). If you do touch this:
       the focused row (thanks to tabindex=0), not on the inner link
       button (which is tabindex=-1).
 
+### Trace Dialog (Phase B of the trace-navigation plan)
+
+Primary flow:
+
+- [ ] The XLerate ribbon group on the Home tab has three buttons:
+      **Show Task Pane**, **Trace Precedents**, **Trace Dependents**.
+- [ ] With an active cell that has known precedents, click ribbon →
+      **Trace Precedents**. A dialog window opens center-screen. The
+      first result row has the cyan focus ring; Excel's active cell is
+      unchanged from before the click (the dialog opens on that cell's
+      trace tree).
+- [ ] **Live-nav:** press ArrowDown. Excel's active cell jumps to the
+      row-1 cell immediately; the dialog ring moves in lockstep. No
+      Enter required.
+- [ ] Hold ArrowDown through a long trace for ~2 seconds. The grid
+      selection steps through each row without skipping; the dialog
+      ring tracks. If visible lag per step appears, flag it — rAF
+      coalescing is in the plan as a polish pass.
+- [ ] ArrowUp walks back up symmetrically. Home / End jump to first /
+      last row and Excel follows.
+- [ ] **Esc** closes the dialog. Excel's active cell is wherever the
+      user last arrowed to (NOT reverted to the pre-dialog cell).
+      Immediately press any arrow key. If Excel's grid selection moves,
+      focus-return-to-grid worked (Phase B.7 rung 1 succeeded). If the
+      keypress does nothing, focus is still in the taskpane — known
+      limitation, click once in the grid to recover.
+- [ ] **Enter** on a mid-list row closes the dialog the same way as Esc.
+- [ ] Dialog's **X button** (title-bar close) also dismisses. Taskpane
+      status line does not show an error.
+
+Idempotency + re-entry:
+
+- [ ] With a dialog already open, click the **Trace Precedents** ribbon
+      button again. The existing dialog closes and a new one opens for
+      the (possibly updated) active cell.
+- [ ] Click **Trace Dependents** on a cell that only has precedents →
+      dialog opens, says "Trace dependents on <addr>: 1 cell" (just the
+      root). Arrow keys do nothing; Esc closes; no errors.
+- [ ] Click **Trace Precedents** on an empty cell with no formulas and
+      no precedents → same "1 cell" end state.
+
+Taskpane co-entry:
+
+- [ ] The taskpane **Trace Precedents (Dialog)** and **Trace
+      Dependents (Dialog)** buttons open the same dialog. Use them
+      interchangeably with the ribbon buttons. State (one-dialog-only
+      guard) is shared within each runtime; opening from the ribbon
+      then from the taskpane closes the ribbon-opened dialog before
+      opening the taskpane-opened one (each runtime has its own handle).
+
+Cross-interaction with the taskpane trace list (Phase A):
+
+- [ ] Run the taskpane **Trace Precedents (Active Cell)** button. List
+      renders with a focused row in the taskpane. Then open the dialog
+      via the ribbon for the same cell. Dialog shows the same rows.
+      Closing the dialog does not affect the taskpane list.
+
+Undo semantics:
+
+- [ ] After live-nav selections, press Ctrl+Z in the grid. XLerate has
+      not added any undo entries of its own (trace is read-only for
+      the workbook). Excel's own selection history is governed by
+      Excel; accept whatever it does.
+
+Known limitation (documented, not a failure):
+
+- [ ] On Excel Online / Mac, focus-return after Esc may not land on the
+      grid; one click or keypress is needed to resume typing. The cell
+      is still selected correctly.
+
 ---
 
 ## When something fails
