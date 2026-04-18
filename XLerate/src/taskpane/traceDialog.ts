@@ -16,6 +16,14 @@ import {
 const BODY_ID = "trace-dialog-body";
 const STATUS_ID = "trace-dialog-status";
 const TITLE_ID = "trace-dialog-title";
+const ROW_INDEX_ATTR = "data-trace-index";
+const ROW_FOCUSED_CLASS = "trace-row-focused";
+
+// Keyboard-navigation state. `currentRows` mirrors what's rendered;
+// `currentFocusIndex` is the row that arrow keys operate on. Both are
+// module-level: the dialog is single-trace, single-window.
+let currentRows: TraceRow[] = [];
+let currentFocusIndex: number | null = null;
 
 function setDialogStatus(message: string): void {
   const el = document.getElementById(STATUS_ID);
@@ -43,11 +51,82 @@ function parseDialogParams(): DialogParams {
   return { direction, address: address && address.length > 0 ? address : null, maxDepth };
 }
 
+function getRowElements(): HTMLTableRowElement[] {
+  const body = document.getElementById(BODY_ID);
+  if (!(body instanceof HTMLTableSectionElement)) return [];
+  return Array.from(body.querySelectorAll<HTMLTableRowElement>(`tr[${ROW_INDEX_ATTR}]`));
+}
+
+function focusRow(targetIndex: number): void {
+  const elements = getRowElements();
+  if (elements.length === 0) {
+    currentFocusIndex = null;
+    return;
+  }
+  const clamped = Math.max(0, Math.min(elements.length - 1, targetIndex));
+  elements.forEach((el, i) => {
+    el.classList.toggle(ROW_FOCUSED_CLASS, i === clamped);
+    el.setAttribute("aria-selected", i === clamped ? "true" : "false");
+  });
+  currentFocusIndex = clamped;
+  const target = elements[clamped];
+  target.focus();
+  target.scrollIntoView({ block: "nearest" });
+}
+
+function handleDialogKeydown(event: KeyboardEvent): void {
+  if (currentRows.length === 0) return;
+  const i = currentFocusIndex ?? 0;
+  switch (event.key) {
+    case "ArrowDown":
+      event.preventDefault();
+      focusRow(i + 1);
+      break;
+    case "ArrowUp":
+      event.preventDefault();
+      focusRow(i - 1);
+      break;
+    case "Home":
+      event.preventDefault();
+      focusRow(0);
+      break;
+    case "End":
+      event.preventDefault();
+      focusRow(currentRows.length - 1);
+      break;
+    // Enter and Escape are reserved for the live-nav / close protocol in B.5.
+    // Intentionally unhandled here — the dialog's X button still closes via
+    // Office.js DialogEventReceived on the parent.
+    default:
+      break;
+  }
+}
+
+function handleDialogFocusIn(event: FocusEvent): void {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const row = target.closest(`tr[${ROW_INDEX_ATTR}]`);
+  if (!(row instanceof HTMLTableRowElement)) return;
+  const raw = row.getAttribute(ROW_INDEX_ATTR);
+  const idx = raw === null ? NaN : Number(raw);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= currentRows.length) return;
+  if (currentFocusIndex !== idx) focusRow(idx);
+}
+
+function wireDialogKeyboard(): void {
+  const body = document.getElementById(BODY_ID);
+  if (!(body instanceof HTMLTableSectionElement)) return;
+  body.addEventListener("keydown", handleDialogKeydown);
+  body.addEventListener("focusin", handleDialogFocusIn);
+}
+
 function renderDialogTraceRows(rows: TraceRow[]): void {
   const body = document.getElementById(BODY_ID);
   if (!(body instanceof HTMLTableSectionElement)) return;
 
   body.textContent = "";
+  currentRows = rows;
+  currentFocusIndex = null;
 
   if (rows.length === 0) {
     const tr = document.createElement("tr");
@@ -64,7 +143,7 @@ function renderDialogTraceRows(rows: TraceRow[]): void {
     tr.className = "trace-row-clickable";
     tr.setAttribute("role", "option");
     tr.setAttribute("tabindex", "0");
-    tr.setAttribute("data-trace-index", String(index));
+    tr.setAttribute(ROW_INDEX_ATTR, String(index));
     tr.setAttribute("aria-selected", "false");
 
     const level = document.createElement("td");
@@ -80,6 +159,11 @@ function renderDialogTraceRows(rows: TraceRow[]): void {
     tr.append(level, address, value, formula);
     body.appendChild(tr);
   });
+
+  // Dialog always claims focus when opened, so this .focus() reliably lands
+  // visible focus on row 0 — unlike the taskpane version where the iframe
+  // might not have document focus. Arrow keys work immediately.
+  focusRow(0);
 }
 
 async function runDialogTrace(params: DialogParams): Promise<void> {
@@ -128,6 +212,7 @@ Office.onReady((info) => {
     setDialogStatus("Trace dialog requires Excel.");
     return;
   }
+  wireDialogKeyboard();
   const params = parseDialogParams();
   void runDialogTrace(params);
 });
