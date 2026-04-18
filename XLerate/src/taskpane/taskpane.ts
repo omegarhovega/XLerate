@@ -22,15 +22,11 @@ import { runErrorWrap as runErrorWrapService } from "../services/errorWrap.servi
 import { runSwitchSign as runSwitchSignService } from "../services/switchSign.service";
 import { runCycleTextStyle as runCycleTextStyleService } from "../services/cycleTextStyle.service";
 import {
-  buildTraceCellKey,
-  formatTraceFormula,
-  formatTraceValue,
-  MAX_TRACE_ROWS,
   parseWorksheetScopedAddress,
   sanitizeTraceDepth,
-  scalarFromMatrix,
-  type TraceDirection
+  type TraceDirection,
 } from "../core/traceUtils";
+import { buildTrace, type TraceCellInfo, type TraceRow } from "../core/traceBuilder";
 
 type CellFormula = string | number | boolean;
 type CellValue = string | number | boolean | null;
@@ -54,13 +50,6 @@ type BorderSideItem = (typeof BORDER_SIDE_ITEMS)[number];
 // position in memory only. The cell-format cycle infers position from the
 // current cell's formatting and does not need an index at all.
 let textStyleCycleIndex = -1;
-
-type TraceRow = {
-  level: number;
-  address: string;
-  value: string;
-  formula: string;
-};
 
 function setStatus(message: string): void {
   const target = document.getElementById("status-text");
@@ -516,14 +505,19 @@ async function getDirectTraceNeighbors(
   return neighbors;
 }
 
-function toTraceRow(cell: Excel.Range, level: number): TraceRow {
-  const value = formatTraceValue(scalarFromMatrix(cell.values));
-  const formula = formatTraceFormula(scalarFromMatrix(cell.formulas));
+/**
+ * Snapshot a loaded Excel.Range into a plain TraceCellInfo for the pure
+ * builder. Assumes address / worksheet/name / rowIndex / columnIndex /
+ * values / formulas have already been loaded on the caller's context.
+ */
+function snapshotRangeForTrace(cell: Excel.Range): TraceCellInfo {
   return {
-    level,
+    worksheetName: cell.worksheet.name,
+    rowIndex: cell.rowIndex,
+    columnIndex: cell.columnIndex,
     address: cell.address,
-    value,
-    formula
+    value: cell.values,
+    formula: cell.formulas,
   };
 }
 
@@ -534,47 +528,23 @@ async function runTrace(direction: TraceDirection): Promise<void> {
   }
 
   await Excel.run(async (context) => {
-    const root = context.workbook.getActiveCell();
-    root.load(["address", "worksheet/name", "rowIndex", "columnIndex", "values", "formulas"]);
+    const rootRange = context.workbook.getActiveCell();
+    rootRange.load(["address", "worksheet/name", "rowIndex", "columnIndex", "values", "formulas"]);
     await context.sync();
 
+    const root = snapshotRangeForTrace(rootRange);
     const maxDepth = getTraceMaxDepthInputValue();
-    const rows: TraceRow[] = [toTraceRow(root, 0)];
-    const visited = new Set<string>([buildTraceCellKey(root.worksheet.name, root.rowIndex, root.columnIndex)]);
-    const queue: Array<{ level: number; cell: Excel.Range }> = [{ level: 0, cell: root }];
-    let truncated = false;
 
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current) {
-        break;
-      }
+    const getNeighbors = async (info: TraceCellInfo): Promise<TraceCellInfo[]> => {
+      const worksheet = context.workbook.worksheets.getItem(info.worksheetName);
+      const cell = worksheet.getRangeByIndexes(info.rowIndex, info.columnIndex, 1, 1);
+      const neighbors = await getDirectTraceNeighbors(context, cell, direction);
+      // getDirectTraceNeighbors already loaded the address / worksheet/name
+      // / rowIndex / columnIndex / values / formulas on each neighbor Range.
+      return neighbors.map(snapshotRangeForTrace);
+    };
 
-      if (current.level >= maxDepth) {
-        continue;
-      }
-
-      const neighbors = await getDirectTraceNeighbors(context, current.cell, direction);
-      for (const neighbor of neighbors) {
-        const key = buildTraceCellKey(neighbor.worksheet.name, neighbor.rowIndex, neighbor.columnIndex);
-        if (visited.has(key)) {
-          continue;
-        }
-        visited.add(key);
-
-        rows.push(toTraceRow(neighbor, current.level + 1));
-        if (rows.length >= MAX_TRACE_ROWS) {
-          truncated = true;
-          break;
-        }
-
-        queue.push({ level: current.level + 1, cell: neighbor });
-      }
-
-      if (truncated) {
-        break;
-      }
-    }
+    const { rows, truncated } = await buildTrace({ root, maxDepth, getNeighbors });
 
     renderTraceRows(rows);
     setStatus(
