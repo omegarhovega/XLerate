@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>XLerate — Trace</title>
+  <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <style>
+    /* Inline to avoid fabric-cdn blocking the dialog on slow networks.
+       Keep in sync with the trace-table styles in taskpane.css where it matters. */
+    html, body { margin: 0; padding: 0; height: 100%; font-family: "Segoe UI", sans-serif; background: #fff; color: #222; }
+    body { padding: 12px; box-sizing: border-box; display: flex; flex-direction: column; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    header h1 { margin: 0; font-size: 15px; font-weight: 600; }
+    #trace-dialog-hint { font-size: 11px; color: #666; }
+    #trace-dialog-status { font-size: 11px; color: #555; margin-top: 6px; min-height: 14px; }
+    .trace-table-wrap { flex: 1; overflow: auto; border: 1px solid #e3e3e3; border-radius: 4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border-bottom: 1px solid #efefef; text-align: left; padding: 6px 8px; vertical-align: top; }
+    thead th { position: sticky; top: 0; background: #fafafa; }
+    tr.trace-row-clickable { cursor: pointer; outline: none; }
+    tr.trace-row-clickable:hover { background: #f5f9ff; }
+    tr.trace-row-clickable.trace-row-focused {
+      background: #e6fbf8;
+      box-shadow: inset 0 0 0 2px #00f2da;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 id="trace-dialog-title">Trace</h1>
+    <span id="trace-dialog-hint">↑/↓ to navigate · Esc or Enter to close</span>
+  </header>
+  <div class="trace-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Level</th>
+          <th>Address</th>
+          <th>Value</th>
+          <th>Formula</th>
+        </tr>
+      </thead>
+      <tbody id="trace-dialog-body" role="listbox" aria-label="Trace results">
+        <tr>
+          <td colspan="4">Loading…</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div id="trace-dialog-status">Initializing…</div>
+</body>
+</html>

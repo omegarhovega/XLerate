@@ -561,6 +561,61 @@ async function runTraceDependents(): Promise<void> {
   await runTrace("dependents");
 }
 
+// Phase B.2 scaffolding. Later phases (B.3+) populate the dialog with a
+// trace + keyboard nav + messageParent protocol; B.6 replaces the temp
+// taskpane buttons with a ribbon entry. For now this just verifies that
+// the dialog page loads, Office.js binds inside it, and the taskpane can
+// receive lifecycle events.
+let activeTraceDialog: Office.Dialog | null = null;
+
+async function openTraceDialog(direction: TraceDirection): Promise<void> {
+  // Read the active cell so the dialog knows where to start (plumbed via
+  // query params; not used by the skeleton but will be in B.3).
+  let startAddress = "";
+  try {
+    await Excel.run(async (context) => {
+      const cell = context.workbook.getActiveCell();
+      cell.load("address");
+      await context.sync();
+      startAddress = cell.address;
+    });
+  } catch {
+    // Non-fatal: the dialog skeleton works without an address.
+  }
+
+  const url = new URL("traceDialog.html", window.location.href);
+  url.searchParams.set("direction", direction);
+  if (startAddress) url.searchParams.set("address", startAddress);
+
+  // Close any existing dialog first — Office.js only allows one add-in
+  // dialog open at a time per host; opening a second throws otherwise.
+  if (activeTraceDialog) {
+    try {
+      activeTraceDialog.close();
+    } catch {
+      // Ignore; dialog may already be closed.
+    }
+    activeTraceDialog = null;
+  }
+
+  Office.context.ui.displayDialogAsync(
+    url.toString(),
+    { height: 60, width: 40, displayInIframe: true },
+    (result) => {
+      if (result.status !== Office.AsyncResultStatus.Succeeded) {
+        setStatus(`Failed to open trace dialog: ${result.error.message}`);
+        return;
+      }
+      activeTraceDialog = result.value;
+      activeTraceDialog.addEventHandler(Office.EventType.DialogEventReceived, () => {
+        // User closed the dialog (X button) or the host disposed it.
+        activeTraceDialog = null;
+      });
+      setStatus(`Trace ${direction} dialog opened${startAddress ? ` for ${startAddress}` : ""}.`);
+    }
+  );
+}
+
 async function runSelectTraceAddress(fullAddress: string): Promise<void> {
   const parsed = parseWorksheetScopedAddress(fullAddress);
   if (!parsed) {
@@ -859,6 +914,13 @@ Office.onReady((info) => {
   document
     .getElementById("run-trace-dependents")
     ?.addEventListener("click", () => guardedRun(runTraceDependents));
+  // TEMP: Phase B.2 dev shim. Replaced by ribbon hotkey in B.6.
+  document
+    .getElementById("run-trace-dialog-precedents")
+    ?.addEventListener("click", () => guardedRun(() => openTraceDialog("precedents")));
+  document
+    .getElementById("run-trace-dialog-dependents")
+    ?.addEventListener("click", () => guardedRun(() => openTraceDialog("dependents")));
   document
     .getElementById("run-cycle-number-format")
     ?.addEventListener("click", () => guardedRun(runCycleNumberFormat));
