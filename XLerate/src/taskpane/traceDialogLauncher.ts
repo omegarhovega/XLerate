@@ -78,7 +78,18 @@ function logTracePerf(label: string): void {
 async function pullFocusToGrid(): Promise<void> {
   try {
     // eslint-disable-next-line no-console
-    console.log("[trace-focus] pullFocusToGrid start; activeElement =", document?.activeElement);
+    console.log(
+      "[trace-focus] start; hasFocus =", document?.hasFocus?.(),
+      "activeElement =", document?.activeElement
+    );
+    if (typeof window !== "undefined" && typeof window.blur === "function") {
+      // Release window-level focus from the taskpane iframe. Deprecated
+      // for cross-origin window control but still honored in WebView2 /
+      // Edge embedded hosts (Excel Desktop's taskpane), where it's the
+      // only programmatic way to release HWND-level focus held by the
+      // add-in runtime.
+      window.blur();
+    }
     if (typeof document !== "undefined") {
       const active = document.activeElement as HTMLElement | null;
       if (active && typeof active.blur === "function") {
@@ -86,7 +97,10 @@ async function pullFocusToGrid(): Promise<void> {
       }
     }
     // eslint-disable-next-line no-console
-    console.log("[trace-focus] after blur; activeElement =", document?.activeElement);
+    console.log(
+      "[trace-focus] after blur; hasFocus =", document?.hasFocus?.(),
+      "activeElement =", document?.activeElement
+    );
     await Excel.run(async (context) => {
       const cell = context.workbook.getActiveCell();
       cell.load("worksheet/name");
@@ -96,11 +110,16 @@ async function pullFocusToGrid(): Promise<void> {
       await context.sync();
     });
     // eslint-disable-next-line no-console
-    console.log("[trace-focus] after Excel.run; activeElement =", document?.activeElement);
-    // Also peek 500ms later to see where focus actually ended up.
+    console.log(
+      "[trace-focus] after Excel.run; hasFocus =", document?.hasFocus?.(),
+      "activeElement =", document?.activeElement
+    );
     setTimeout(() => {
       // eslint-disable-next-line no-console
-      console.log("[trace-focus] +500ms; activeElement =", document?.activeElement);
+      console.log(
+        "[trace-focus] +500ms; hasFocus =", document?.hasFocus?.(),
+        "activeElement =", document?.activeElement
+      );
     }, 500);
   } catch (err) {
     // Non-fatal: worst case, user presses one key/click to resume.
