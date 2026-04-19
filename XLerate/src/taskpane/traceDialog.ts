@@ -450,33 +450,33 @@ function parseParentMessage(raw: unknown): ParentToDialog | null {
 
 /**
  * Apply a setRows message: update allRows, rebuild the child index,
- * merge expansion state, and re-render. On the first emission all
- * nodes that have children are expanded. On progressive updates the
- * user's existing collapses stick; newly arriving nodes default to
- * expanded so the user sees the full subtree as it streams in.
+ * and re-render.
+ *
+ * Default expansion: on the first emission we add the ROOT to the
+ * expanded set so its direct precedents become visible as soon as
+ * level 1 arrives. Deeper levels stay collapsed — the user drills
+ * down with ArrowRight or a chevron click. Rationale: progressive
+ * streaming means the first emit contains only the root (no
+ * children yet), so a blanket "expand everything that has children"
+ * would be a no-op at that moment and later emits wouldn't
+ * retroactively expand the root. Pre-seeding the root addresses
+ * that corner case directly.
+ *
+ * Subsequent emits preserve expansion state verbatim: the user's
+ * collapses stick, and newly-arriving nodes default to collapsed
+ * (consistent with the "drill down to explore" model — matches the
+ * root's behavior after its children first appear).
  */
 function applySetRows(newRows: TraceRow[]): void {
   const isFirstEmit = allRows.length === 0;
-  const prevAddresses = new Set(allRows.map((r) => r.address));
 
   allRows = newRows;
   rebuildChildIndex();
 
   if (isFirstEmit) {
-    // Default: every node that has children starts expanded.
     expanded = new Set();
-    for (const row of allRows) {
-      if (rowHasChildren(row)) expanded.add(row.address);
-    }
-  } else {
-    // Progressive: only auto-expand nodes that are newly present AND
-    // have children. Previously-expanded nodes remain expanded; user's
-    // collapsed nodes remain collapsed.
-    for (const row of allRows) {
-      if (!prevAddresses.has(row.address) && rowHasChildren(row)) {
-        expanded.add(row.address);
-      }
-    }
+    const root = findRootRow();
+    if (root) expanded.add(root.address);
   }
 
   renderTree({ preserveFocus: !isFirstEmit });
