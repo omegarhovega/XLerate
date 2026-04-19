@@ -41,6 +41,14 @@ split-button Format menu and the Error Wrap button (needs a text
 input) are deferred — the current layout has individual cycle
 buttons and no Error Wrap on the ribbon.
 
+**Shared runtime note:** ribbon buttons should feel as fast as taskpane
+buttons (no 500 ms–1 s delay). If you see a delay, the manifest's
+`SharedRuntime` requirement may not be taking effect — verify the
+taskpane loads automatically at Excel startup (you should NOT have to
+click Show Task Pane before ribbon buttons work). If needed, clear
+`%LOCALAPPDATA%\Microsoft\Office\16.0\Wef` while Excel is closed and
+re-sideload; Excel caches manifests aggressively.
+
 - [ ] Open Excel. The ribbon shows an **XLerate** tab alongside Home,
       Insert, etc. Click it.
 - [ ] **Formulas** group contains four buttons in this order:
@@ -62,8 +70,8 @@ ribbon wiring reaches the handler):
 
 - [ ] Click **Switch Sign** → selection's numeric/formula cells flip
       sign in one undo step. No taskpane status is shown (ribbon
-      handlers don't have DOM access to the taskpane); behavior is
-      the visible cell change.
+      handlers intentionally don't update the taskpane DOM — they
+      only call services); behavior is the visible cell change.
 - [ ] Click **Smart Fill Right** on a valid active-cell formula →
       selection fills right. On an invalid cell (no formula, merged,
       no boundary) the ribbon button silently no-ops — no error
@@ -85,12 +93,12 @@ ribbon wiring reaches the handler):
       right (or re-activates if already open).
 
 If any ribbon button appears to do nothing on click, the first
-suspect is the commands.ts handler either missing the
+suspect is the `ribbonActions.ts` handler either missing its
 `Office.actions.associate` registration or failing silently before
-`event.completed()`. Open DevTools on the commands iframe (harder to
-reach than taskpane; typically needs `office-addin-debugging
---debug-method=web`) and look for `[XLerate ribbon]` error logs from
-the `finish()` wrapper.
+`event.completed()`. Open DevTools on the **taskpane** (right-click
+taskpane → Inspect) — shared runtime means ribbon handlers run in the
+taskpane iframe, so their `[XLerate ribbon]` error logs from the
+`finish()` wrapper surface in the same console.
 
 ### Switch Sign (spec §3.3)
 
@@ -346,9 +354,10 @@ Taskpane co-entry:
 
 - [ ] The taskpane **Trace Precedents (Dialog)** and **Trace Dependents
       (Dialog)** buttons open the same dialog. Interchangeable with the
-      ribbon buttons. Each runtime has its own `activeDialog` handle,
-      so opening from the ribbon then from the taskpane closes the
-      ribbon-opened dialog cleanly.
+      ribbon buttons. In shared runtime ribbon and taskpane share a
+      single `activeDialog` module variable; `openTraceDialog()` calls
+      `closeActiveDialog()` before displaying the new one, so opening
+      a second dialog from either entry point closes the first cleanly.
 
 Cross-interaction with the taskpane trace list (Phase A):
 

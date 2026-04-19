@@ -14,10 +14,12 @@ import {
 
 /**
  * Shared dialog-opener used by both the taskpane (secondary entry
- * buttons) and the commands runtime (ribbon button ExecuteFunction
- * actions). Each caller gets its own module-level `activeDialog`
- * because the taskpane and commands runtime are separate JavaScript
- * contexts — imports don't share state between them.
+ * buttons) and the ribbon `Office.actions.associate` handlers in
+ * `ribbonActions.ts`. With shared runtime enabled in the manifest,
+ * both entry points live in the same taskpane JS context and share
+ * this module's `activeDialog`; `openTraceDialog()` calls
+ * `closeActiveDialog()` first so a second open from either entry
+ * point closes the previous dialog cleanly.
  *
  * **Trace is computed HERE, in the parent runtime, not in the dialog.**
  * Office dialogs cannot call Excel.run (documented restriction:

@@ -38,13 +38,14 @@ design — the answer is almost always "extend the port."**
 **Pragmatic exception during migration:** `src/taskpane/` files use the
 Office.js globals (`Excel`, `Office`) directly for features that haven't
 been migrated through the port yet (`taskpane.ts`'s own `Excel.run` calls,
-`traceDialogLauncher.ts`, `traceExcelNeighbors.ts`, `traceDialog.ts`),
-and `src/commands/commands.ts` (ribbon ExecuteFunction handlers) does the
-same. The dependency-cruiser rule restricts `office-js` *imports* to
-`adapters/`; globals-via-`/* global Excel, Office */` are not imports
-and remain allowed in `taskpane/` + `commands/`. When a taskpane feature
-eventually gets its harness migration, Office.js usage moves into the
-port and this exception shrinks.
+`traceDialogLauncher.ts`, `traceExcelNeighbors.ts`, `traceDialog.ts`,
+and `ribbonActions.ts` — the ribbon ExecuteFunction handlers, which used
+to live in `src/commands/commands.ts` before the shared-runtime
+migration). The dependency-cruiser rule restricts `office-js` *imports*
+to `adapters/`; globals-via-`/* global Excel, Office */` are not imports
+and remain allowed in `taskpane/`. When a taskpane feature eventually
+gets its harness migration, Office.js usage moves into the port and this
+exception shrinks.
 
 ## The evaluator
 
@@ -200,6 +201,33 @@ stored addresses. See spec §3.5 / §3.6.
 
 Still true: never bulk-wipe with `sheet.getUsedRange(true).format.fill.clear()` —
 that nukes user formatting alongside ours.
+
+### Shared runtime: ribbon handlers live in the taskpane iframe
+
+The manifest declares `SharedRuntime 1.1` with a long-lifetime Taskpane
+runtime. That means there is **no separate commands iframe**: ribbon
+`ExecuteFunction` actions dispatch into the already-loaded taskpane
+JavaScript context. `Office.actions.associate(...)` calls in
+`src/taskpane/ribbonActions.ts` (imported for side effects from
+`taskpane.ts`) register the ribbon functions. A click on a ribbon button
+invokes them in-process — no cold start, no IPC boundary crossing.
+
+Implications:
+
+- Module-level state (e.g. the text-style cycle index) IS shared between
+  ribbon and taskpane entry points because they are the same module
+  graph. Session-only `let` variables are viable again.
+- DevTools-on-the-taskpane shows all `[XLerate ribbon]` errors. There is
+  no separate commands DevTools to hunt for.
+- Host requirement: Excel 2021+ / Microsoft 365 Desktop / Excel Online.
+  Excel 2019 and earlier will not load the add-in.
+- Every associated function MUST still call `event.completed()` in a
+  `finally`, or the ribbon button stays in a "busy" state. The `finish()`
+  wrapper in `ribbonActions.ts` is the one chokepoint that enforces this.
+
+Do NOT reintroduce a `src/commands/` directory or a second webpack entry
+for ribbon dispatch — that re-splits the runtimes and brings the
+sluggishness back.
 
 ### Office Dialog API windows cannot call `Excel.run`
 
