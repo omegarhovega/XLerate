@@ -98,6 +98,17 @@ module.exports = async (env, options) => {
         options: env.WEBPACK_BUILD || options.https !== undefined ? options.https : await getHttpsOptions(),
       },
       port: process.env.npm_package_config_dev_server_port || 3000,
+      // The full-screen client overlay injected by webpack-dev-server blocks
+      // interaction inside the taskpane iframe AND the Office Dialog window
+      // on every warning / runtime error — making it impossible to judge
+      // live-nav smoothness in sideload. Disabled here; use the Edge DevTools
+      // console (right-click taskpane → Inspect) for error visibility during
+      // development. Re-enable selectively with
+      //   client: { overlay: { errors: true, warnings: false, runtimeErrors: false } }
+      // if a future change needs it.
+      client: {
+        overlay: false,
+      },
     },
   };
 
