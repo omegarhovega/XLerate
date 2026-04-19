@@ -5,13 +5,16 @@ import {
   formatTraceFormula,
   formatTraceValue,
   MAX_TRACE_MAX_DEPTH,
+  MAX_TRACE_ROWS,
   parseWorksheetScopedAddress,
   sanitizeTraceDepth,
-  scalarFromMatrix
+  scalarFromMatrix,
 } from "../src/core/traceUtils";
 
 describe("trace utils", () => {
   it("sanitizes depth to allowed bounds", () => {
+    expect(DEFAULT_TRACE_MAX_DEPTH).toBe(10);
+    expect(MAX_TRACE_ROWS).toBe(500);
     expect(sanitizeTraceDepth(undefined)).toBe(DEFAULT_TRACE_MAX_DEPTH);
     expect(sanitizeTraceDepth(NaN)).toBe(DEFAULT_TRACE_MAX_DEPTH);
     expect(sanitizeTraceDepth(0)).toBe(1);
@@ -40,18 +43,21 @@ describe("trace utils", () => {
   });
 
   it("parses worksheet-scoped addresses including quoted and workbook-prefixed names", () => {
-    expect(parseWorksheetScopedAddress("Sheet1!A1")).toEqual({ worksheetName: "Sheet1", rangeAddress: "A1" });
+    expect(parseWorksheetScopedAddress("Sheet1!A1")).toEqual({
+      worksheetName: "Sheet1",
+      rangeAddress: "A1",
+    });
     expect(parseWorksheetScopedAddress("'My Sheet'!B2:C3")).toEqual({
       worksheetName: "My Sheet",
-      rangeAddress: "B2:C3"
+      rangeAddress: "B2:C3",
     });
     expect(parseWorksheetScopedAddress("'O''Brien'!D4")).toEqual({
       worksheetName: "O'Brien",
-      rangeAddress: "D4"
+      rangeAddress: "D4",
     });
     expect(parseWorksheetScopedAddress("[Book1]SheetX!A1")).toEqual({
       worksheetName: "SheetX",
-      rangeAddress: "A1"
+      rangeAddress: "A1",
     });
     expect(parseWorksheetScopedAddress("A1")).toBeNull();
   });

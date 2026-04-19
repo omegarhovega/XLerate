@@ -41,6 +41,7 @@ let activeDialog: Office.Dialog | null = null;
  */
 type PendingCompute = { direction: TraceDirection; maxDepth: number };
 let pendingCompute: PendingCompute | null = null;
+let activeDialogSessionId = 0;
 
 // ---- Perf instrumentation (remove when diagnosis is done). ----
 // Logs boundary timestamps so we can identify which segment of the
@@ -57,70 +58,33 @@ function logTracePerf(label: string): void {
 }
 
 /**
- * Best-effort return of keyboard focus to the Excel grid after dialog
- * close. Office.js has no direct API for "give focus to the grid", so
- * this is a two-step workaround:
+ * Return keyboard focus to the Excel grid after dialog close.
  *
- * 1. Blur whatever element in the taskpane currently holds focus. When
- *    the dialog closes, the browser returns focus to the spawning
- *    iframe (the taskpane, under shared runtime). If a specific
- *    element inside the taskpane grabs focus, the grid can't reclaim
- *    it. Blurring it first releases that claim.
- * 2. `worksheet.activate()` + `range.select()` — activate() asks Excel
- *    to make the worksheet the active rectangle, which on Desktop
- *    pulls grid focus once the taskpane is no longer holding it.
+ * Excel now exposes `Workbook.focus()` on ExcelApiDesktop 1.1, which is
+ * a host-level focus handoff rather than a DOM/webview blur heuristic.
+ * We still activate/select the current cell so the right location is
+ * visible, then call `workbook.focus()` when supported so keyboard
+ * events go back to the grid.
  *
- * This must run AFTER the browser has returned focus to the taskpane
- * iframe — if we run synchronously right after `dialog.close()`, the
- * return happens later and overrides our blur + activate. The caller
- * defers via `setTimeout` for this reason.
+ * This must still run AFTER the browser has returned focus to the
+ * taskpane iframe — if we run synchronously right after `dialog.close()`,
+ * the browser's return happens later and overrides us. The caller defers
+ * via `setTimeout` for this reason.
  */
 async function pullFocusToGrid(): Promise<void> {
   try {
-    // eslint-disable-next-line no-console
-    console.log(
-      "[trace-focus] start; hasFocus =", document?.hasFocus?.(),
-      "activeElement =", document?.activeElement
-    );
-    if (typeof window !== "undefined" && typeof window.blur === "function") {
-      // Release window-level focus from the taskpane iframe. Deprecated
-      // for cross-origin window control but still honored in WebView2 /
-      // Edge embedded hosts (Excel Desktop's taskpane), where it's the
-      // only programmatic way to release HWND-level focus held by the
-      // add-in runtime.
-      window.blur();
-    }
-    if (typeof document !== "undefined") {
-      const active = document.activeElement as HTMLElement | null;
-      if (active && typeof active.blur === "function") {
-        active.blur();
-      }
-    }
-    // eslint-disable-next-line no-console
-    console.log(
-      "[trace-focus] after blur; hasFocus =", document?.hasFocus?.(),
-      "activeElement =", document?.activeElement
-    );
     await Excel.run(async (context) => {
-      const cell = context.workbook.getActiveCell();
+      const workbook = context.workbook;
+      const cell = workbook.getActiveCell();
       cell.load("worksheet/name");
       await context.sync();
       cell.worksheet.activate();
       cell.select();
+      if (Office.context.requirements.isSetSupported("ExcelApiDesktop", "1.1")) {
+        workbook.focus();
+      }
       await context.sync();
     });
-    // eslint-disable-next-line no-console
-    console.log(
-      "[trace-focus] after Excel.run; hasFocus =", document?.hasFocus?.(),
-      "activeElement =", document?.activeElement
-    );
-    setTimeout(() => {
-      // eslint-disable-next-line no-console
-      console.log(
-        "[trace-focus] +500ms; hasFocus =", document?.hasFocus?.(),
-        "activeElement =", document?.activeElement
-      );
-    }, 500);
   } catch (err) {
     // Non-fatal: worst case, user presses one key/click to resume.
     // eslint-disable-next-line no-console
@@ -293,7 +257,11 @@ function parseDialogMessage(raw: unknown): DialogToParent | null {
   return null;
 }
 
-async function computeAndPushRows(request: PendingCompute): Promise<void> {
+async function computeAndPushRows(
+  request: PendingCompute,
+  dialog: Office.Dialog,
+  dialogSessionId: number
+): Promise<void> {
   try {
     logTracePerf("t4 compute.start");
     const startAddress = await getActiveCellAddress();
@@ -312,9 +280,9 @@ async function computeAndPushRows(request: PendingCompute): Promise<void> {
       if (progress.isFinal) {
         logTracePerf(`t5 compute.end rows=${progress.rows.length} truncated=${progress.truncated}`);
       }
-      if (!activeDialog) return;
+      if (activeDialog !== dialog || activeDialogSessionId !== dialogSessionId) return;
       try {
-        activeDialog.messageChild(
+        dialog.messageChild(
           JSON.stringify({
             action: "setRows",
             rows: progress.rows,
@@ -331,20 +299,26 @@ async function computeAndPushRows(request: PendingCompute): Promise<void> {
       }
     });
   } catch (error) {
-    if (!activeDialog) return;
+    if (activeDialog !== dialog || activeDialogSessionId !== dialogSessionId) return;
     const message = error instanceof Error ? error.message : String(error);
     try {
-      activeDialog.messageChild(JSON.stringify({ action: "error", message }));
+      dialog.messageChild(JSON.stringify({ action: "error", message }));
     } catch {
       // Dialog already gone; nothing to report.
     }
   }
 }
 
-function handleDialogMessage(arg: { message?: string; origin?: string | undefined } | { error: number }): void {
+function handleDialogMessage(
+  dialog: Office.Dialog,
+  dialogSessionId: number,
+  arg: { message?: string; origin?: string | undefined } | { error: number }
+): void {
   if (!("message" in arg) || typeof arg.message !== "string") return;
   const parsed = parseDialogMessage(arg.message);
   if (!parsed) return;
+
+  if (activeDialog !== dialog || activeDialogSessionId !== dialogSessionId) return;
 
   if (parsed.action === "ready") {
     logTracePerf("t3 parent.readyReceived");
@@ -354,7 +328,7 @@ function handleDialogMessage(arg: { message?: string; origin?: string | undefine
     if (activeDialog && pendingCompute) {
       const request = pendingCompute;
       pendingCompute = null;
-      void computeAndPushRows(request);
+      void computeAndPushRows(request, dialog, dialogSessionId);
     }
     return;
   }
@@ -393,6 +367,7 @@ export async function openTraceDialog(
   direction: TraceDirection,
   options: OpenTraceDialogOptions = {}
 ): Promise<void> {
+  const nextDialogSessionId = activeDialogSessionId + 1;
   tracePerfSession = Date.now();
   logTracePerf(`t0 click direction=${direction}`);
   closeActiveDialog();
@@ -419,7 +394,10 @@ export async function openTraceDialog(
         logTracePerf("t1 displayDialogAsync.callback");
         const thisDialog = result.value;
         activeDialog = thisDialog;
-        thisDialog.addEventHandler(Office.EventType.DialogMessageReceived, handleDialogMessage);
+        activeDialogSessionId = nextDialogSessionId;
+        thisDialog.addEventHandler(Office.EventType.DialogMessageReceived, (arg) =>
+          handleDialogMessage(thisDialog, nextDialogSessionId, arg)
+        );
         thisDialog.addEventHandler(Office.EventType.DialogEventReceived, () => {
           // Cleanup path for user-initiated close (X button, system close).
           // closeActiveDialog() handles both the ref-nulling and the focus
@@ -428,7 +406,7 @@ export async function openTraceDialog(
           // The identity guard skips the case where a newer openTraceDialog
           // superseded this dialog — in that case closeActiveDialog has
           // already run and reassigned activeDialog to the newer instance.
-          if (activeDialog !== thisDialog) return;
+          if (activeDialog !== thisDialog || activeDialogSessionId !== nextDialogSessionId) return;
           activeDialog = null;
           pendingCompute = null;
           schedulePullFocusToGrid();

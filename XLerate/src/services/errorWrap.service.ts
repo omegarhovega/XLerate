@@ -13,11 +13,12 @@ export async function runErrorWrap(port: ExcelPort, errorValue = "NA()"): Promis
   for (const cell of cells) {
     if (!cell.isFormula) continue;
     const wrapped = wrapFormulaWithError(cell.formula, errorValue);
-    if (wrapped !== cell.formula) {
+    const nextFormula = cell.isArrayFormula ? `{${wrapped}}` : wrapped;
+    if (nextFormula !== cell.formula) {
       mutations.push({
         address: cell.address,
         kind: cell.isArrayFormula ? "arrayFormula" : "formula",
-        formula: wrapped,
+        formula: nextFormula,
       });
     }
   }

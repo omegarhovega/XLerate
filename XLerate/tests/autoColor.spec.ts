@@ -5,14 +5,15 @@ import {
   isExternalReferenceFormula,
   isOnlyNumbersAndOperators,
   isWorkbookLinkFormula,
-  isWorksheetLinkFormula
+  isWorksheetLinkFormula,
 } from "../src/core/autoColor";
 
 describe("auto color baseline parity", () => {
   it("detects formula helper categories", () => {
-    expect(isWorkbookLinkFormula("='[Book1.xlsx]Sheet1'!A1")).toBe(true);
-    expect(isWorksheetLinkFormula("=Sheet2!A1")).toBe(true);
-    expect(isExternalReferenceFormula("=WEBSERVICE(\"https://x\")")).toBe(true);
+    expect(isWorksheetLinkFormula("=A1")).toBe(true);
+    expect(isWorkbookLinkFormula("=Sheet2!A1")).toBe(true);
+    expect(isExternalReferenceFormula("='[Book1.xlsx]Sheet1'!A1")).toBe(true);
+    expect(isExternalReferenceFormula('=WEBSERVICE("https://x")')).toBe(true);
     expect(isOnlyNumbersAndOperators("=1+2*(3-4)")).toBe(true);
   });
 
@@ -34,7 +35,7 @@ describe("auto color baseline parity", () => {
       classifyAutoColorCell({
         value: "Open",
         numberFormat: "General",
-        hasHyperlink: true
+        hasHyperlink: true,
       })
     ).toBe("hyperlink");
   });
@@ -44,37 +45,45 @@ describe("auto color baseline parity", () => {
       classifyAutoColorCell({
         formula: "=A1+10",
         value: 42,
-        numberFormat: "General"
+        numberFormat: "General",
       })
     ).toBe("partialInput");
+  });
+
+  it("classifies same-sheet link formulas", () => {
+    expect(
+      classifyAutoColorCell({
+        formula: "=A1",
+        value: 123,
+        numberFormat: "General",
+      })
+    ).toBe("worksheetLink");
   });
 
   it("classifies workbook link formulas", () => {
     expect(
       classifyAutoColorCell({
-        formula: "='[Book1.xlsx]Sheet1'!A1",
-        value: 123,
-        numberFormat: "General"
-      })
-    ).toBe("workbookLink");
-  });
-
-  it("classifies worksheet link formulas", () => {
-    expect(
-      classifyAutoColorCell({
         formula: "=Sheet2!A1",
         value: 123,
-        numberFormat: "General"
+        numberFormat: "General",
       })
-    ).toBe("worksheetLink");
+    ).toBe("workbookLink");
   });
 
   it("classifies external formulas", () => {
     expect(
       classifyAutoColorCell({
-        formula: "=WEBSERVICE(\"https://example.com\")",
+        formula: "='[Book1.xlsx]Sheet1'!A1",
         value: 123,
-        numberFormat: "General"
+        numberFormat: "General",
+      })
+    ).toBe("external");
+
+    expect(
+      classifyAutoColorCell({
+        formula: '=WEBSERVICE("https://example.com")',
+        value: 123,
+        numberFormat: "General",
       })
     ).toBe("external");
   });
@@ -84,26 +93,26 @@ describe("auto color baseline parity", () => {
       classifyAutoColorCell({
         formula: "=1+2",
         value: 3,
-        numberFormat: "General"
+        numberFormat: "General",
       })
     ).toBe("input");
   });
 
-  it("classifies regular formulas as formula", () => {
+  it("classifies same-sheet referenced formulas as worksheet links", () => {
     expect(
       classifyAutoColorCell({
         formula: "=SUM(A1:A3)",
         value: 10,
-        numberFormat: "General"
+        numberFormat: "General",
       })
-    ).toBe("formula");
+    ).toBe("worksheetLink");
   });
 
   it("does not classify date-like numeric values as input", () => {
     expect(
       classifyAutoColorCell({
         value: 45292,
-        numberFormat: "dd-mmm-yy"
+        numberFormat: "dd-mmm-yy",
       })
     ).toBe("none");
   });
@@ -113,18 +122,18 @@ describe("auto color baseline parity", () => {
       [
         { formula: "=A1+5", value: 10, numberFormat: "General" },
         { formula: "=Sheet2!A1", value: 9, numberFormat: "General" },
-        { value: 100, numberFormat: "General" }
+        { value: 100, numberFormat: "General" },
       ],
       [
         { formula: "=SUM(A1:A3)", value: 50, numberFormat: "General" },
         { value: "x", hasHyperlink: true, numberFormat: "General" },
-        { value: "", numberFormat: "General" }
-      ]
+        { value: "", numberFormat: "General" },
+      ],
     ]);
 
     expect(grid).toEqual([
-      ["partialInput", "worksheetLink", "input"],
-      ["formula", "hyperlink", "none"]
+      ["partialInput", "workbookLink", "input"],
+      ["worksheetLink", "hyperlink", "none"],
     ]);
   });
 });

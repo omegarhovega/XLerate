@@ -4,9 +4,9 @@ export type ParsedTraceAddress = {
   rangeAddress: string;
 };
 
-export const DEFAULT_TRACE_MAX_DEPTH = 5;
+export const DEFAULT_TRACE_MAX_DEPTH = 10;
 export const MAX_TRACE_MAX_DEPTH = 20;
-export const MAX_TRACE_ROWS = 1000;
+export const MAX_TRACE_ROWS = 500;
 
 export function sanitizeTraceDepth(raw: unknown): number {
   if (typeof raw !== "number" || !Number.isFinite(raw)) {
@@ -79,7 +79,11 @@ export function formatTraceFormula(value: unknown): string {
   return "";
 }
 
-export function buildTraceCellKey(worksheetName: string, rowIndex: number, columnIndex: number): string {
+export function buildTraceCellKey(
+  worksheetName: string,
+  rowIndex: number,
+  columnIndex: number
+): string {
   return `${worksheetName}!R${rowIndex}C${columnIndex}`;
 }
 

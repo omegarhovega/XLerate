@@ -18,7 +18,7 @@ export type AutoColorCell = {
 export type AutoColorPalette = Record<Exclude<AutoColorCategory, "none">, string>;
 
 const CELL_REFERENCE_REGEX = /[$]?[A-Za-z]+[$]?[0-9]+|R[0-9]*C[0-9]*/;
-const WORKBOOK_LINK_REGEX = /\[[^\]]+\]/;
+const EXTERNAL_WORKBOOK_REFERENCE_REGEX = /\[[^\]]+\]/;
 const SHEET_REFERENCE_REGEX = /(\[[^\]]+\])?'?[^!]+!'?/g;
 const A1_REFERENCE_REGEX = /[$]?[A-Za-z]+[$]?[0-9]+/g;
 const R1C1_REFERENCE_REGEX = /R[0-9]*C[0-9]*/g;
@@ -32,7 +32,7 @@ export const DEFAULT_AUTO_COLOR_PALETTE: AutoColorPalette = {
   workbookLink: "#CC99FF",
   external: "#00B0F0",
   hyperlink: "#FF8000",
-  partialInput: "#800000"
+  partialInput: "#800000",
 };
 
 function normalizeFormula(formula: string): string {
@@ -78,16 +78,25 @@ function hasCellReference(formula: string): boolean {
 }
 
 export function isWorkbookLinkFormula(formula: string): boolean {
-  return WORKBOOK_LINK_REGEX.test(formula);
+  return formula.includes("!") && !EXTERNAL_WORKBOOK_REFERENCE_REGEX.test(formula);
 }
 
 export function isWorksheetLinkFormula(formula: string): boolean {
-  return formula.includes("!") && !isWorkbookLinkFormula(formula);
+  return (
+    hasCellReference(formula) &&
+    !formula.includes("!") &&
+    !EXTERNAL_WORKBOOK_REFERENCE_REGEX.test(formula)
+  );
 }
 
 export function isExternalReferenceFormula(formula: string): boolean {
   const upper = formula.toUpperCase();
-  return upper.includes("WEBSERVICE") || upper.includes("ODBC") || upper.includes("SQL");
+  return (
+    EXTERNAL_WORKBOOK_REFERENCE_REGEX.test(formula) ||
+    upper.includes("WEBSERVICE") ||
+    upper.includes("ODBC") ||
+    upper.includes("SQL")
+  );
 }
 
 export function isInputCell(cell: AutoColorCell): boolean {

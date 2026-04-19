@@ -5,16 +5,25 @@ export type SelectionCell = {
 };
 
 export function wrapFormulaWithError(formula: string, errorValue = "NA()"): string {
-  const innerFormula = formula.startsWith("=") ? formula.slice(1) : formula;
+  let innerFormula = formula;
+  if (innerFormula.startsWith("{") && innerFormula.endsWith("}")) {
+    innerFormula = innerFormula.slice(1, -1);
+  }
+  if (innerFormula.startsWith("=")) {
+    innerFormula = innerFormula.slice(1);
+  }
   return `=IFERROR(${innerFormula}, ${errorValue})`;
 }
 
-export function wrapSelectionFormulas(values: SelectionCell[], errorValue = "NA()"): SelectionCell[] {
+export function wrapSelectionFormulas(
+  values: SelectionCell[],
+  errorValue = "NA()"
+): SelectionCell[] {
   return values.map((cell) => {
     if (cell.isFormula && typeof cell.formula === "string") {
       return {
         isFormula: true,
-        formula: wrapFormulaWithError(cell.formula, errorValue)
+        formula: wrapFormulaWithError(cell.formula, errorValue),
       };
     }
 

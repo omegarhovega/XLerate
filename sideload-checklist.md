@@ -333,10 +333,15 @@ Focus-return-to-grid on close:
 
 - [ ] **Esc** closes. Excel's active cell is wherever the user last
       navigated to (NOT reverted). Immediately press any arrow key on
-      the grid — if Excel's selection moves, focus-return (Phase B.7
-      rung 1, worksheet.activate + range.select) worked. If nothing
-      happens, focus is still in the taskpane iframe — known
-      limitation on some hosts (Online / Mac); one click recovers.
+      the grid — if Excel's selection moves, `Workbook.focus()` handed
+      keyboard events back to the workbook successfully.
+- [ ] After the same close, try a non-arrow keyboard gesture such as
+      typing a digit or using **Ctrl+Arrow**. On supported Desktop hosts,
+      the workbook should behave as if the sheet retained focus, not
+      merely as if the selection moved.
+- [ ] If focus does NOT return on a host that lacks `ExcelApiDesktop 1.1`
+      support, document it as a known limitation. The current supported
+      fix is Desktop-only because `Workbook.focus()` is Desktop-only.
 
 Idempotency + re-entry:
 

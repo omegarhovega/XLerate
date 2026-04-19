@@ -50,16 +50,21 @@ exception shrinks.
 ## The evaluator
 
 `npm run ci:all` (inside `XLerate/`) is the single command that tells you
-whether a change is safe. It runs: typecheck → lint → arch check → tests →
-build. Every task you complete should end with a green `ci:all`.
+whether a change is safe. It currently runs: `typecheck:core` →
+`typecheck:harness` → `lint:harness` → `arch:check` → `test:core` →
+`build:dev`. Every task you complete should end with a green `ci:all`.
 
 Individual stages:
 - `npm run typecheck:core` — strict tsc against `src/core` and `tests`
 - `npm run typecheck:harness` — strict tsc against `src/adapters` and `src/services`
-- `npm run lint` — ESLint
+- `npm run lint:harness` — ESLint scoped to the harness-checked adapter/service paths
 - `npm run arch:check` — dependency-cruiser
 - `npm run test:core` — Vitest run
-- `npm run build` — webpack production build
+- `npm run build:dev` — webpack development build
+
+`open-issues.md` tracks the currently-known gap between this practical
+gate and the stricter full integration gate we eventually want
+(`lint`, manifest validation, production build).
 
 ## When making a change
 
@@ -228,6 +233,36 @@ Implications:
 Do NOT reintroduce a `src/commands/` directory or a second webpack entry
 for ribbon dispatch — that re-splits the runtimes and brings the
 sluggishness back.
+
+### Shared runtime: trace dialog close uses `Workbook.focus()` on Desktop
+
+When the trace dialog closes, the supported Desktop fix is
+`context.workbook.focus()` from `ExcelApiDesktop 1.1`. That API restores
+keyboard events to the workbook/grid more reliably than the older
+`window.blur()` heuristic. We still activate/select the current cell so
+the right location is visible, then call `workbook.focus()` when the
+requirement set is available.
+
+```typescript
+await Excel.run(async (ctx) => {
+  const workbook = ctx.workbook;
+  const cell = workbook.getActiveCell();
+  cell.load("worksheet/name");
+  await ctx.sync();
+  cell.worksheet.activate();
+  cell.select();
+  if (Office.context.requirements.isSetSupported("ExcelApiDesktop", "1.1")) {
+    workbook.focus();
+  }
+  await ctx.sync();
+});
+```
+
+This still must run AFTER the browser's post-close focus return. If
+called synchronously from `dialog.close()`'s caller, the browser's own
+focus return happens later and overrides it. Defer via
+`setTimeout(..., 50)`. See `pullFocusToGrid` in
+`src/taskpane/traceDialogLauncher.ts`.
 
 ### Office Dialog API windows cannot call `Excel.run`
 

@@ -23,32 +23,63 @@ import {
 export class ExcelPortLive implements ExcelPort {
   async getSelectionCells(): Promise<CellSnapshot[]> {
     return Excel.run(async (context) => {
-      const range = context.workbook.getSelectedRange();
-      range.load(["rowCount", "columnCount", "rowIndex", "columnIndex", "values", "formulas"]);
-      const worksheet = range.worksheet;
-      worksheet.load("name");
+      const areas = await getSelectedAreas(context);
+
+      for (const area of areas) {
+        area.load(["rowCount", "columnCount", "rowIndex", "columnIndex", "values", "formulas"]);
+        area.worksheet.load("name");
+      }
+      await context.sync();
+
+      const formulaArrayCells: Excel.Range[][][] = [];
+      for (const area of areas) {
+        const areaCells: Excel.Range[][] = [];
+        for (let r = 0; r < area.rowCount; r++) {
+          const rowCells: Excel.Range[] = [];
+          for (let c = 0; c < area.columnCount; c++) {
+            const cell = area.getCell(r, c);
+            // eslint-disable-next-line office-addins/no-navigational-load
+            cell.load("formulaArray");
+            rowCells.push(cell);
+          }
+          areaCells.push(rowCells);
+        }
+        formulaArrayCells.push(areaCells);
+      }
       await context.sync();
 
       const snapshots: CellSnapshot[] = [];
-      for (let r = 0; r < range.rowCount; r++) {
-        for (let c = 0; c < range.columnCount; c++) {
-          const formula = range.formulas[r][c];
-          const value = range.values[r][c];
-          const address: CellAddress = {
-            sheet: worksheet.name,
-            row: range.rowIndex + r,
-            col: range.columnIndex + c,
-          };
-          const formulaText = typeof formula === "string" ? formula : "";
-          const isFormula = formulaText.startsWith("=") || formulaText.startsWith("{=");
-          const isArrayFormula = formulaText.startsWith("{=");
-          snapshots.push({
-            address,
-            isFormula,
-            isArrayFormula,
-            formula: isFormula ? formulaText : "",
-            value: isFormula ? undefined : value,
-          });
+      for (let areaIndex = 0; areaIndex < areas.length; areaIndex++) {
+        const area = areas[areaIndex];
+        const worksheet = area.worksheet;
+        const areaCells = formulaArrayCells[areaIndex];
+
+        for (let r = 0; r < area.rowCount; r++) {
+          for (let c = 0; c < area.columnCount; c++) {
+            const formula = area.formulas[r][c];
+            const value = area.values[r][c];
+            const address: CellAddress = {
+              sheet: worksheet.name,
+              row: area.rowIndex + r,
+              col: area.columnIndex + c,
+            };
+            const formulaText = typeof formula === "string" ? formula : "";
+            const formulaArrayText = areaCells[r][c].formulaArray;
+            const isArrayFormula =
+              typeof formulaArrayText === "string" && formulaArrayText.length > 0;
+            const arrayFormula = isArrayFormula
+              ? formatArrayFormulaForSnapshot(formulaArrayText)
+              : "";
+            const isFormula = isArrayFormula || formulaText.startsWith("=");
+
+            snapshots.push({
+              address,
+              isFormula,
+              isArrayFormula,
+              formula: isArrayFormula ? arrayFormula : isFormula ? formulaText : "",
+              value: isFormula ? undefined : value,
+            });
+          }
         }
       }
       return snapshots;
@@ -57,74 +88,83 @@ export class ExcelPortLive implements ExcelPort {
 
   async getSelectionFormatting(): Promise<CellFormattingSnapshot[]> {
     return Excel.run(async (context) => {
-      const range = context.workbook.getSelectedRange();
-      range.load([
-        "rowCount",
-        "columnCount",
-        "rowIndex",
-        "columnIndex",
-        "numberFormat",
-        "hyperlink",
-      ]);
-      const format = range.format;
-      format.load(["fill/color", "fill/pattern"]);
-      format.font.load(["name", "size", "color", "bold", "italic", "underline", "strikethrough"]);
-      const borders = format.borders;
-      const edges: Excel.BorderIndex[] = [
-        Excel.BorderIndex.edgeLeft,
-        Excel.BorderIndex.edgeTop,
-        Excel.BorderIndex.edgeBottom,
-        Excel.BorderIndex.edgeRight,
-      ];
-      const edgeItems = edges.map((e) => borders.getItem(e));
-      edgeItems.forEach((b) => b.load(["style", "color"]));
-      const worksheet = range.worksheet;
-      worksheet.load("name");
+      const areas = await getSelectedAreas(context);
+      const cellProperties = areas.map((area) => {
+        area.load(["rowCount", "columnCount", "rowIndex", "columnIndex", "numberFormat"]);
+        area.worksheet.load("name");
+        return area.getCellProperties({
+          hyperlink: true,
+          format: {
+            fill: {
+              color: true,
+              pattern: true,
+            },
+            font: {
+              name: true,
+              size: true,
+              color: true,
+              bold: true,
+              italic: true,
+              underline: true,
+              strikethrough: true,
+            },
+            borders: {
+              color: true,
+              style: true,
+            },
+          },
+        });
+      });
       await context.sync();
 
-      const [edgeLeft, edgeTop, edgeBottom, edgeRight] = edgeItems;
-
       const snapshots: CellFormattingSnapshot[] = [];
-      for (let r = 0; r < range.rowCount; r++) {
-        for (let c = 0; c < range.columnCount; c++) {
-          const address: CellAddress = {
-            sheet: worksheet.name,
-            row: range.rowIndex + r,
-            col: range.columnIndex + c,
-          };
-          const numberFormatCell =
-            Array.isArray(range.numberFormat) && Array.isArray(range.numberFormat[r])
-              ? String(range.numberFormat[r][c] ?? "General")
-              : "General";
-          const hyperlinkRaw = (range as unknown as { hyperlink?: unknown }).hyperlink;
-          const hyperlinkCell =
-            Array.isArray(hyperlinkRaw) && Array.isArray((hyperlinkRaw as unknown[])[r])
-              ? Boolean(((hyperlinkRaw as unknown[])[r] as unknown[])[c])
-              : false;
-          snapshots.push({
-            address,
-            numberFormat: numberFormatCell,
-            hasHyperlink: hyperlinkCell,
-            fillPattern: format.fill.pattern ?? null,
-            fillColor: format.fill.color ?? null,
-            fontName: format.font.name ?? null,
-            fontSize: typeof format.font.size === "number" ? format.font.size : null,
-            fontColor: format.font.color ?? null,
-            fontBold: typeof format.font.bold === "boolean" ? format.font.bold : null,
-            fontItalic: typeof format.font.italic === "boolean" ? format.font.italic : null,
-            fontUnderline:
-              typeof format.font.underline === "string" ? format.font.underline !== "None" : null,
-            fontStrikethrough:
-              typeof format.font.strikethrough === "boolean" ? format.font.strikethrough : null,
-            edgeLeftStyle: edgeLeft.style ?? null,
-            edgeTopStyle: edgeTop.style ?? null,
-            edgeBottomStyle: edgeBottom.style ?? null,
-            edgeRightStyle: edgeRight.style ?? null,
-            edgeLeftColor: edgeLeft.color ?? null,
-            edgeTopColor: edgeTop.color ?? null,
-            edgeBottomColor: edgeBottom.color ?? null,
-            edgeRightColor: edgeRight.color ?? null,
-          });
+      for (let areaIndex = 0; areaIndex < areas.length; areaIndex++) {
+        const area = areas[areaIndex];
+        const worksheet = area.worksheet;
+        const props = cellProperties[areaIndex].value;
+
+        for (let r = 0; r < area.rowCount; r++) {
+          for (let c = 0; c < area.columnCount; c++) {
+            const address: CellAddress = {
+              sheet: worksheet.name,
+              row: area.rowIndex + r,
+              col: area.columnIndex + c,
+            };
+            const numberFormatCell =
+              Array.isArray(area.numberFormat) && Array.isArray(area.numberFormat[r])
+                ? String(area.numberFormat[r][c] ?? "General")
+                : "General";
+            const cellProp = props[r][c];
+            const format = cellProp.format;
+            const borders = format?.borders;
+
+            snapshots.push({
+              address,
+              numberFormat: numberFormatCell,
+              hasHyperlink: hasCellHyperlink(cellProp.hyperlink),
+              fillPattern: format?.fill?.pattern ?? null,
+              fillColor: format?.fill?.color ?? null,
+              fontName: format?.font?.name ?? null,
+              fontSize: typeof format?.font?.size === "number" ? format.font.size : null,
+              fontColor: format?.font?.color ?? null,
+              fontBold: typeof format?.font?.bold === "boolean" ? format.font.bold : null,
+              fontItalic: typeof format?.font?.italic === "boolean" ? format.font.italic : null,
+              fontUnderline:
+                typeof format?.font?.underline === "string"
+                  ? format.font.underline !== "None"
+                  : null,
+              fontStrikethrough:
+                typeof format?.font?.strikethrough === "boolean" ? format.font.strikethrough : null,
+              edgeLeftStyle: borders?.left?.style ?? null,
+              edgeTopStyle: borders?.top?.style ?? null,
+              edgeBottomStyle: borders?.bottom?.style ?? null,
+              edgeRightStyle: borders?.right?.style ?? null,
+              edgeLeftColor: borders?.left?.color ?? null,
+              edgeTopColor: borders?.top?.color ?? null,
+              edgeBottomColor: borders?.bottom?.color ?? null,
+              edgeRightColor: borders?.right?.color ?? null,
+            });
+          }
         }
       }
       return snapshots;
@@ -133,13 +173,6 @@ export class ExcelPortLive implements ExcelPort {
 
   async applyMutations(mutations: CellMutation[]): Promise<void> {
     if (mutations.length === 0) return;
-
-    const arrayFormulaMutations = mutations.filter((m) => m.kind === "arrayFormula");
-    if (arrayFormulaMutations.length > 0) {
-      throw new Error(
-        "ExcelPortLive: array formula mutation is not yet supported. This will be addressed in a later phase."
-      );
-    }
 
     await Excel.run(async (context) => {
       const sheetCache = new Map<string, Excel.Worksheet>();
@@ -163,6 +196,8 @@ export class ExcelPortLive implements ExcelPort {
           cell.values = [[m.value as string | number | boolean | null]];
         } else if (m.kind === "formula") {
           cell.formulas = [[m.formula]];
+        } else if (m.kind === "arrayFormula") {
+          cell.formulaArray = normalizeFormulaArrayForWrite(m.formula);
         } else if (m.kind === "numberFormat") {
           cell.numberFormat = [[m.format]];
         } else if (m.kind === "fontColor") {
@@ -186,6 +221,46 @@ export class ExcelPortLive implements ExcelPort {
       await context.sync();
     });
   }
+}
+
+async function getSelectedAreas(context: Excel.RequestContext): Promise<Excel.Range[]> {
+  const selectedRanges = context.workbook.getSelectedRanges();
+  const areas = selectedRanges.areas;
+  areas.load("items");
+  await context.sync();
+  return areas.items;
+}
+
+function hasCellHyperlink(hyperlink: Excel.RangeHyperlink | undefined): boolean {
+  if (!hyperlink) return false;
+  return Boolean(
+    hyperlink.address ||
+    hyperlink.documentReference ||
+    hyperlink.screenTip ||
+    hyperlink.textToDisplay
+  );
+}
+
+function formatArrayFormulaForSnapshot(formulaArray: string): string {
+  const trimmed = formulaArray.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    return trimmed;
+  }
+  if (trimmed.startsWith("=")) {
+    return `{${trimmed}}`;
+  }
+  return `{=${trimmed}}`;
+}
+
+function normalizeFormulaArrayForWrite(formula: string): string {
+  const trimmed = formula.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    return trimmed.slice(1, -1);
+  }
+  if (trimmed.startsWith("=")) {
+    return trimmed;
+  }
+  return `=${trimmed}`;
 }
 
 function applyFontMutation(cell: Excel.Range, font: FontMutation): void {

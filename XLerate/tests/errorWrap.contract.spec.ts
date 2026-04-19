@@ -76,4 +76,15 @@ describe("Error Wrap contract (spec §3.11)", () => {
     expect(snaps[1].value).toBe(42);
     expect(snaps[2].formula).toBe("=IFERROR(SUM(A:A), 0)");
   });
+
+  it("wraps an array formula and preserves braces", async () => {
+    const port = new ExcelPortFake();
+    port.setCellFormula(addr(0, 0), "{=A1:A3*2}", true);
+    port.setSelection([addr(0, 0)]);
+    await runErrorWrap(port, "0");
+    port.setSelection([addr(0, 0)]);
+    const [snap] = await port.getSelectionCells();
+    expect(snap.isArrayFormula).toBe(true);
+    expect(snap.formula).toBe("{=IFERROR(A1:A3*2, 0)}");
+  });
 });

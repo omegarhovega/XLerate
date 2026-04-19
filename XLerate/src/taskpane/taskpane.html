@@ -1,97 +1,121 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <meta charset="UTF-8" />
-  <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>XLerate</title>
-  <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
-  <link rel="stylesheet" href="https://res-1.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css" />
-  <link href="taskpane.css" rel="stylesheet" type="text/css" />
-</head>
-<body class="ms-Fabric">
-  <section id="sideload-msg" class="app">
-    <h3>Please sideload the add-in to use XLerate actions.</h3>
-  </section>
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>XLerate</title>
+    <script
+      type="text/javascript"
+      src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"
+    ></script>
+    <link
+      rel="stylesheet"
+      href="https://res-1.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css"
+    />
+    <link href="taskpane.css" rel="stylesheet" type="text/css" />
+  </head>
+  <body class="ms-Fabric">
+    <section id="sideload-msg" class="app">
+      <h3>Please sideload the add-in to use XLerate actions.</h3>
+    </section>
 
-  <main id="app-body" class="app" style="display: none;">
-    <header class="header">
-      <img width="32" height="32" src="../../assets/icon-32.png" alt="XLerate" />
-      <h1>XLerate</h1>
-    </header>
+    <main id="app-body" class="app" style="display: none">
+      <header class="header">
+        <img width="32" height="32" src="../../assets/icon-32.png" alt="XLerate" />
+        <h1>XLerate</h1>
+      </header>
 
-    <div class="panel">
-      <h3>Formatting / Formulas</h3>
-      <button id="run-cycle-number-format" class="action-btn">Cycle Number Format (Selection)</button>
-      <button id="run-cycle-date-format" class="action-btn">Cycle Date Format (Selection)</button>
-      <button id="run-cycle-cell-format" class="action-btn">Cycle Cell Format (Selection)</button>
-      <button id="run-cycle-text-style" class="action-btn">Cycle Text Style (Selection)</button>
-      <button id="run-auto-color" class="action-btn">Auto-color Numbers (Selection)</button>
-      <button id="run-switch-sign" class="action-btn">Switch Sign (Selection)</button>
+      <div class="panel">
+        <h3>Formatting / Formulas</h3>
+        <button id="run-cycle-number-format" class="action-btn">
+          Cycle Number Format (Selection)
+        </button>
+        <button id="run-cycle-date-format" class="action-btn">Cycle Date Format (Selection)</button>
+        <button id="run-cycle-cell-format" class="action-btn">Cycle Cell Format (Selection)</button>
+        <button id="run-cycle-text-style" class="action-btn">Cycle Text Style (Selection)</button>
+        <button id="run-auto-color" class="action-btn">Auto-color Numbers (Selection)</button>
+        <button id="run-switch-sign" class="action-btn">Switch Sign (Selection)</button>
 
-      <div class="row">
-        <label for="error-value">Error Wrap fallback</label>
-        <input id="error-value" type="text" value="NA()" />
+        <div class="row">
+          <label for="error-value">Error Wrap fallback</label>
+          <input id="error-value" type="text" value="NA()" />
+        </div>
+        <button id="run-error-wrap" class="action-btn">Error Wrap (Selection)</button>
+        <button id="run-smart-fill-right" class="action-btn">Smart Fill Right (Active Cell)</button>
+        <button id="run-formula-consistency" class="action-btn">
+          Formula Consistency (Selection)
+        </button>
       </div>
-      <button id="run-error-wrap" class="action-btn">Error Wrap (Selection)</button>
-      <button id="run-smart-fill-right" class="action-btn">Smart Fill Right (Active Cell)</button>
-      <button id="run-formula-consistency" class="action-btn">Formula Consistency (Selection)</button>
-    </div>
 
-    <div class="panel">
-      <h3>CAGR</h3>
-      <p>Select a range, then calculate CAGR from first to last value.</p>
-      <button id="run-cagr" class="action-btn">Calculate CAGR</button>
-      <div class="result">Result: <span id="cagr-result">-</span></div>
-    </div>
-
-    <div class="panel">
-      <h3>Trace</h3>
-      <p>Trace direct precedents/dependents recursively from the active cell.</p>
-      <div class="row">
-        <label for="trace-max-depth">Max depth (1-20)</label>
-        <input id="trace-max-depth" type="number" min="1" max="20" value="5" />
+      <div class="panel">
+        <h3>CAGR</h3>
+        <p>Select a range, then calculate CAGR from first to last value.</p>
+        <button id="run-cagr" class="action-btn">Calculate CAGR</button>
+        <div class="result">Result: <span id="cagr-result">-</span></div>
       </div>
-      <button id="run-trace-precedents" class="action-btn">Trace Precedents (Active Cell)</button>
-      <button id="run-trace-dependents" class="action-btn">Trace Dependents (Active Cell)</button>
-      <button id="run-trace-dialog-precedents" class="action-btn secondary-btn">Trace Precedents (Dialog)</button>
-      <button id="run-trace-dialog-dependents" class="action-btn secondary-btn">Trace Dependents (Dialog)</button>
-      <div class="trace-table-wrap">
-        <table class="trace-table">
-          <thead>
-            <tr>
-              <th>Level</th>
-              <th>Address</th>
-              <th>Value</th>
-              <th>Formula</th>
-            </tr>
-          </thead>
-          <tbody id="trace-results-body" role="listbox" aria-label="Trace results (use arrow keys to navigate, Enter to go to cell, Esc to exit list)">
-            <tr>
-              <td colspan="4">No trace results.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
 
-    <div class="panel">
-      <h3>Format Settings</h3>
-      <p>Edit JSON for number/date/cell/text presets used by cycle actions.</p>
-      <div class="row">
-        <label for="format-settings-json">Settings JSON</label>
-        <textarea id="format-settings-json" class="mono-input" rows="14"></textarea>
+      <div class="panel">
+        <h3>Trace</h3>
+        <p>Trace direct precedents/dependents recursively from the active cell.</p>
+        <div class="row">
+          <label for="trace-max-depth">Max depth (1-20)</label>
+          <input id="trace-max-depth" type="number" min="1" max="20" value="10" />
+        </div>
+        <button id="run-trace-precedents" class="action-btn">Trace Precedents (Active Cell)</button>
+        <button id="run-trace-dependents" class="action-btn">Trace Dependents (Active Cell)</button>
+        <button id="run-trace-dialog-precedents" class="action-btn secondary-btn">
+          Trace Precedents (Dialog)
+        </button>
+        <button id="run-trace-dialog-dependents" class="action-btn secondary-btn">
+          Trace Dependents (Dialog)
+        </button>
+        <div class="trace-table-wrap">
+          <table class="trace-table">
+            <thead>
+              <tr>
+                <th>Level</th>
+                <th>Address</th>
+                <th>Value</th>
+                <th>Formula</th>
+              </tr>
+            </thead>
+            <tbody
+              id="trace-results-body"
+              role="listbox"
+              aria-label="Trace results (use arrow keys to navigate, Enter to go to cell, Esc to exit list)"
+            >
+              <tr>
+                <td colspan="4">No trace results.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-      <button id="load-format-settings" class="action-btn secondary-btn">Load Saved Settings</button>
-      <button id="load-default-format-settings" class="action-btn secondary-btn">Load Defaults</button>
-      <button id="save-format-settings" class="action-btn">Save Format Settings</button>
-      <button id="run-reset-format-settings" class="action-btn">Reset Format Settings (Defaults)</button>
-    </div>
 
-    <div class="panel status">
-      <strong>Status</strong>
-      <p id="status-text">Ready.</p>
-    </div>
-  </main>
-</body>
+      <div class="panel">
+        <h3>Format Settings</h3>
+        <p>Edit JSON for number/date/cell/text presets used by cycle actions.</p>
+        <div class="row">
+          <label for="format-settings-json">Settings JSON</label>
+          <textarea id="format-settings-json" class="mono-input" rows="14"></textarea>
+        </div>
+        <button id="load-format-settings" class="action-btn secondary-btn">
+          Load Saved Settings
+        </button>
+        <button id="load-default-format-settings" class="action-btn secondary-btn">
+          Load Defaults
+        </button>
+        <button id="save-format-settings" class="action-btn">Save Format Settings</button>
+        <button id="run-reset-format-settings" class="action-btn">
+          Reset Format Settings (Defaults)
+        </button>
+      </div>
+
+      <div class="panel status">
+        <strong>Status</strong>
+        <p id="status-text">Ready.</p>
+      </div>
+    </main>
+  </body>
 </html>
