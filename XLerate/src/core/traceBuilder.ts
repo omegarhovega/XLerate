@@ -10,12 +10,21 @@ import {
  * One row in the trace result list, independent of how the cells were
  * discovered. Shared between the taskpane table and the Phase B trace
  * dialog.
+ *
+ * `parentAddress` is the address of the cell whose expansion
+ * discovered this row — null for the root. The dialog uses it to
+ * render the precedent DAG as a tree. Because the BFS visited-set
+ * keys on `(worksheet, row, col)`, each address appears exactly
+ * once; a cell that is a precedent of multiple others is attributed
+ * to the first discoverer (a deliberate simplification — full DAG
+ * duplication would change BFS semantics and is out of scope).
  */
 export type TraceRow = {
   level: number;
   address: string;
   value: string;
   formula: string;
+  parentAddress: string | null;
 };
 
 /**
@@ -82,12 +91,17 @@ export type TraceBuilderResult = {
   truncated: boolean;
 };
 
-export function toTraceRow(cell: TraceCellInfo, level: number): TraceRow {
+export function toTraceRow(
+  cell: TraceCellInfo,
+  level: number,
+  parentAddress: string | null
+): TraceRow {
   return {
     level,
     address: cell.address,
     value: formatTraceValue(scalarFromMatrix(cell.value)),
     formula: formatTraceFormula(scalarFromMatrix(cell.formula)),
+    parentAddress,
   };
 }
 
@@ -104,7 +118,7 @@ export async function buildTrace(input: TraceBuilderInput): Promise<TraceBuilder
   const { root, maxDepth, getAllNeighbors, onProgress } = input;
   const maxRows = input.maxRows ?? MAX_TRACE_ROWS;
 
-  const rows: TraceRow[] = [toTraceRow(root, 0)];
+  const rows: TraceRow[] = [toTraceRow(root, 0, null)];
   const visited = new Set<string>([
     buildTraceCellKey(root.worksheetName, root.rowIndex, root.columnIndex),
   ]);
@@ -132,6 +146,7 @@ export async function buildTrace(input: TraceBuilderInput): Promise<TraceBuilder
     const nextLevelCells: TraceCellInfo[] = [];
 
     for (let i = 0; i < neighborLists.length && !truncated; i += 1) {
+      const parent = currentLevelCells[i];
       const neighbors = neighborLists[i] ?? [];
       for (const neighbor of neighbors) {
         const key = buildTraceCellKey(
@@ -142,7 +157,7 @@ export async function buildTrace(input: TraceBuilderInput): Promise<TraceBuilder
         if (visited.has(key)) continue;
         visited.add(key);
 
-        rows.push(toTraceRow(neighbor, level + 1));
+        rows.push(toTraceRow(neighbor, level + 1, parent.address));
         if (rows.length >= maxRows) {
           truncated = true;
           break;

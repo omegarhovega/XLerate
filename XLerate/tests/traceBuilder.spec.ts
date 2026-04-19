@@ -31,7 +31,9 @@ describe("buildTrace", () => {
       maxDepth: 5,
       getAllNeighbors: async () => [[]],
     });
-    expect(result.rows).toEqual([{ level: 0, address: "Sheet1!A1", value: "42", formula: "" }]);
+    expect(result.rows).toEqual([
+      { level: 0, address: "Sheet1!A1", value: "42", formula: "", parentAddress: null },
+    ]);
     expect(result.truncated).toBe(false);
   });
 
@@ -154,6 +156,7 @@ describe("buildTrace", () => {
       address: "Sheet1!A1",
       value: "42",
       formula: "=SUM(B1:B5)",
+      parentAddress: null,
     });
   });
 
@@ -317,6 +320,67 @@ describe("buildTrace", () => {
 
       expect(result.rows.map((r) => r.address)).toEqual(["Sheet1!A1", "Sheet1!B1"]);
       expect(result.truncated).toBe(false);
+    });
+  });
+
+  describe("parentAddress (tree structure)", () => {
+    it("root has parentAddress=null", async () => {
+      const root = cell("Sheet1!A1", 0, 0);
+      const result = await buildTrace({
+        root,
+        maxDepth: 0,
+        getAllNeighbors: async () => [[]],
+      });
+      expect(result.rows[0].parentAddress).toBe(null);
+    });
+
+    it("each non-root row records the address of the cell whose expansion discovered it", async () => {
+      // A -> [B, C]; B -> [D]; C -> [E, F].
+      const a = cell("Sheet1!A1", 0, 0);
+      const b = cell("Sheet1!B1", 0, 1);
+      const c = cell("Sheet1!C1", 0, 2);
+      const d = cell("Sheet1!D1", 0, 3);
+      const e = cell("Sheet1!E1", 0, 4);
+      const f = cell("Sheet1!F1", 0, 5);
+      const neighborMap = new Map<string, TraceCellInfo[]>([
+        ["Sheet1!A1", [b, c]],
+        ["Sheet1!B1", [d]],
+        ["Sheet1!C1", [e, f]],
+      ]);
+      const result = await buildTrace({
+        root: a,
+        maxDepth: 3,
+        getAllNeighbors: batched(neighborMap),
+      });
+      const byAddr = new Map(result.rows.map((r) => [r.address, r.parentAddress]));
+      expect(byAddr.get("Sheet1!A1")).toBe(null);
+      expect(byAddr.get("Sheet1!B1")).toBe("Sheet1!A1");
+      expect(byAddr.get("Sheet1!C1")).toBe("Sheet1!A1");
+      expect(byAddr.get("Sheet1!D1")).toBe("Sheet1!B1");
+      expect(byAddr.get("Sheet1!E1")).toBe("Sheet1!C1");
+      expect(byAddr.get("Sheet1!F1")).toBe("Sheet1!C1");
+    });
+
+    it("on DAG (shared precedent), first discoverer becomes parent — visited set prevents re-attribution", async () => {
+      // A -> [B, C]; both B and C have D as a precedent, but D appears
+      // once, attributed to B (BFS visits B before C).
+      const a = cell("Sheet1!A1", 0, 0);
+      const b = cell("Sheet1!B1", 0, 1);
+      const c = cell("Sheet1!C1", 0, 2);
+      const d = cell("Sheet1!D1", 0, 3);
+      const neighborMap = new Map<string, TraceCellInfo[]>([
+        ["Sheet1!A1", [b, c]],
+        ["Sheet1!B1", [d]],
+        ["Sheet1!C1", [d]],
+      ]);
+      const result = await buildTrace({
+        root: a,
+        maxDepth: 5,
+        getAllNeighbors: batched(neighborMap),
+      });
+      const dRows = result.rows.filter((r) => r.address === "Sheet1!D1");
+      expect(dRows).toHaveLength(1);
+      expect(dRows[0].parentAddress).toBe("Sheet1!B1");
     });
   });
 
