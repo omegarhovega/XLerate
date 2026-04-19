@@ -59,8 +59,13 @@ module.exports = async (env, options) => {
       new CopyWebpackPlugin({
         patterns: [
           {
-            from: "assets/*",
-            to: "assets/[name][ext][query]",
+            from: "assets",
+            to: "assets",
+            // The icon-generation script (`npm run icons`) drops the
+            // source SVGs alongside the rendered PNGs in assets/icons/
+            // for debugging. They're never loaded at runtime — keep
+            // them out of the shipped bundle.
+            globOptions: { ignore: ["**/*.svg"] },
           },
           {
             from: "manifest*.xml",

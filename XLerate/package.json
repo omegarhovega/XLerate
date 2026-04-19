@@ -33,7 +33,8 @@
     "ci:all": "npm run typecheck:core && npm run typecheck:harness && npm run lint:harness && npm run arch:check && npm run test:core && npm run build:dev",
     "start:wsl": "webpack serve --mode development",
     "stop:wsl": "sh -c 'fuser -k 3000/tcp 2>/dev/null || true'",
-    "start:web:manual": "webpack serve --mode development"
+    "start:web:manual": "webpack serve --mode development",
+    "icons": "node scripts/build-icons.mjs"
   },
   "dependencies": {
     "core-js": "^3.36.0",
@@ -64,6 +65,7 @@
     "office-addin-prettier-config": "^2.0.1",
     "os-browserify": "^0.3.0",
     "process": "^0.11.10",
+    "sharp": "^0.34.5",
     "source-map-loader": "^5.0.0",
     "typescript": "^5.4.2",
     "vitest": "^4.0.18",
