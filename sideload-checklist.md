@@ -34,6 +34,64 @@ Verify these once per session. They apply to every feature.
 
 ## Feature checklist
 
+### Ribbon tab (spec §2.1, Option B realized)
+
+The XLerate tab holds eleven buttons across four groups. Spec §2.1's
+split-button Format menu and the Error Wrap button (needs a text
+input) are deferred — the current layout has individual cycle
+buttons and no Error Wrap on the ribbon.
+
+- [ ] Open Excel. The ribbon shows an **XLerate** tab alongside Home,
+      Insert, etc. Click it.
+- [ ] **Formulas** group contains four buttons in this order:
+      **Trace Precedents**, **Trace Dependents**, **Switch Sign**,
+      **Smart Fill Right**.
+- [ ] **Auditing** group contains one button: **Horizontal Check**.
+- [ ] **Formatting** group contains five buttons:
+      **Cycle Number**, **Cycle Date**, **Cycle Cell**,
+      **Cycle Text Style**, **Auto-color**.
+- [ ] **Settings** group contains one button: **Show Task Pane**.
+- [ ] Hover each button — a supertip appears with the button's label
+      as the title and an explanatory sentence below.
+- [ ] No buttons appear on the **Home** tab (single-entry migration —
+      the previous Home-tab CommandsGroup is removed).
+
+Functional spot-check per group (full feature verification is
+covered in the per-feature sections below; here we just confirm the
+ribbon wiring reaches the handler):
+
+- [ ] Click **Switch Sign** → selection's numeric/formula cells flip
+      sign in one undo step. No taskpane status is shown (ribbon
+      handlers don't have DOM access to the taskpane); behavior is
+      the visible cell change.
+- [ ] Click **Smart Fill Right** on a valid active-cell formula →
+      selection fills right. On an invalid cell (no formula, merged,
+      no boundary) the ribbon button silently no-ops — no error
+      popup, no status line. This is expected; the taskpane button
+      gives the structured error message if you want one.
+- [ ] Click **Horizontal Check** on a row of formulas → green/red
+      marks appear; Ctrl+Z removes them.
+- [ ] Click **Cycle Number** on a cell with a value → its number
+      format advances. Click again → advances. Click **Cycle Cell**
+      instead → advances the cell-format preset.
+- [ ] **Cycle Text Style** consistency check: click the ribbon
+      button; then from the taskpane click **Cycle Text Style**; they
+      should advance through the preset list in the same sequence
+      (localStorage-backed shared index — see CLAUDE.md "Move
+      text-style cycle index to localStorage").
+- [ ] Click **Auto-color** on a column mixing numbers and formulas →
+      each cell gets its category color per spec §3.12.
+- [ ] Click **Show Task Pane** → the XLerate task pane opens on the
+      right (or re-activates if already open).
+
+If any ribbon button appears to do nothing on click, the first
+suspect is the commands.ts handler either missing the
+`Office.actions.associate` registration or failing silently before
+`event.completed()`. Open DevTools on the commands iframe (harder to
+reach than taskpane; typically needs `office-addin-debugging
+--debug-method=web`) and look for `[XLerate ribbon]` error logs from
+the `finish()` wrapper.
+
 ### Switch Sign (spec §3.3)
 
 - [ ] Single numeric cell `10` → `-10`.
@@ -203,9 +261,13 @@ navigation with live selection-following in the grid.
 
 Primary flow — opening:
 
-- [ ] The XLerate ribbon group on the Home tab has three buttons:
-      **Show Task Pane**, **Trace Precedents**, **Trace Dependents**.
-- [ ] On a cell with precedents, click ribbon → **Trace Precedents**.
+- [ ] The **XLerate** tab appears on the Excel ribbon (replaces the
+      single Home-tab group from earlier builds). Opening the tab shows
+      four groups in order: **Formulas**, **Auditing**, **Formatting**,
+      **Settings**. (See the "Ribbon tab" section below for full
+      per-button verification.)
+- [ ] On a cell with precedents, click XLerate tab → Formulas group →
+      **Trace Precedents**.
       Dialog opens center-screen. Excel's active cell is unchanged
       from before the click.
 - [ ] Dialog shows "Loading…" briefly (≤ ~1 s on a warm bundle),
