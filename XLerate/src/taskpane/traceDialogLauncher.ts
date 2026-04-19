@@ -59,19 +59,32 @@ function logTracePerf(label: string): void {
 /**
  * Best-effort return of keyboard focus to the Excel grid after dialog
  * close. Office.js has no direct API for "give focus to the grid", so
- * this is a ladder of workarounds:
+ * this is a two-step workaround:
  *
- * 1. `worksheet.activate()` + `range.select()` — activate() asks Excel
+ * 1. Blur whatever element in the taskpane currently holds focus. When
+ *    the dialog closes, the browser returns focus to the spawning
+ *    iframe (the taskpane, under shared runtime). If a specific
+ *    element inside the taskpane grabs focus, the grid can't reclaim
+ *    it. Blurring it first releases that claim.
+ * 2. `worksheet.activate()` + `range.select()` — activate() asks Excel
  *    to make the worksheet the active rectangle, which on Desktop
- *    typically pulls grid focus.
+ *    pulls grid focus once the taskpane is no longer holding it.
  *
- * If (1) doesn't land focus on the grid (known Online/Mac limitation),
- * the user has one cheap recovery: any keypress after Esc goes to
- * Excel's grid because the taskpane iframe has released focus along
- * with the dialog. The cell is already correct; only focus is off.
+ * This must run AFTER the browser has actually returned focus to the
+ * taskpane (i.e. after the dialog's close has settled). The caller
+ * wires it into the Office Dialog `DialogEventReceived` event, not
+ * into the synchronous `closeActiveDialog()` flow — an earlier
+ * implementation fired this immediately after `dialog.close()` and
+ * lost the race against the browser's own post-close focus return.
  */
 async function pullFocusToGrid(): Promise<void> {
   try {
+    if (typeof document !== "undefined") {
+      const active = document.activeElement as HTMLElement | null;
+      if (active && typeof active.blur === "function") {
+        active.blur();
+      }
+    }
     await Excel.run(async (context) => {
       const cell = context.workbook.getActiveCell();
       cell.load("worksheet/name");
@@ -95,7 +108,9 @@ function closeActiveDialog(): void {
     }
     activeDialog = null;
     pendingCompute = null;
-    void pullFocusToGrid();
+    // Focus return is triggered from DialogEventReceived rather than
+    // here so it runs after the browser has finished returning focus
+    // to the taskpane iframe; see pullFocusToGrid's docstring.
   }
 }
 
@@ -359,11 +374,21 @@ export async function openTraceDialog(
           return;
         }
         logTracePerf("t1 displayDialogAsync.callback");
-        activeDialog = result.value;
-        activeDialog.addEventHandler(Office.EventType.DialogMessageReceived, handleDialogMessage);
-        activeDialog.addEventHandler(Office.EventType.DialogEventReceived, () => {
+        const thisDialog = result.value;
+        activeDialog = thisDialog;
+        thisDialog.addEventHandler(Office.EventType.DialogMessageReceived, handleDialogMessage);
+        thisDialog.addEventHandler(Office.EventType.DialogEventReceived, () => {
+          // When a second openTraceDialog supersedes this one,
+          // activeDialog has already been reassigned to the newer
+          // instance before this close event fires. Skip both the
+          // null and the focus pull in that case — nulling would
+          // drop the reference to the live dialog, and pulling focus
+          // would yank it away from a dialog the user is about to
+          // interact with.
+          if (activeDialog !== thisDialog) return;
           activeDialog = null;
           pendingCompute = null;
+          void pullFocusToGrid();
         });
         resolve();
       }
