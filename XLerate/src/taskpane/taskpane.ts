@@ -8,15 +8,9 @@ import {
   type SelectionCellFormatState
 } from "../core/cellFormatCycle";
 import { FORMAT_SETTINGS_KEY, resolveFormatSettings, type ResolvedFormatSettings } from "../core/formatSettings";
-import {
-  analyzeHorizontalFormulaConsistency,
-  type FormulaConsistencyCell,
-  type FormulaConsistencyMark
-} from "../core/formulaConsistency";
 import { runCycleNumberFormat as runCycleNumberFormatService } from "../services/cycleNumberFormat.service";
 import { runCycleDateFormat as runCycleDateFormatService } from "../services/cycleDateFormat.service";
 import { runCycleCellFormat as runCycleCellFormatService } from "../services/cycleCellFormat.service";
-import { computeSmartFillRight, type SmartFillRow } from "../core/smartFillRight";
 import { ExcelPortLive } from "../adapters/excelPortLive";
 import { runErrorWrap as runErrorWrapService } from "../services/errorWrap.service";
 import { runSwitchSign as runSwitchSignService } from "../services/switchSign.service";
@@ -33,11 +27,12 @@ import {
   snapshotRangeForTrace,
 } from "./traceExcelNeighbors";
 import { openTraceDialog } from "./traceDialogLauncher";
+import {
+  applyFormulaConsistencyAction,
+  applySmartFillRightAction,
+} from "./workbookActions";
 
-type CellFormula = string | number | boolean;
 type CellValue = string | number | boolean | null;
-const CONSISTENT_COLOR = "#00F2DA";
-const INCONSISTENT_COLOR = "#FF0000";
 const FORMAT_SETTINGS_EDITOR_ID = "format-settings-json";
 const TRACE_MAX_DEPTH_INPUT_ID = "trace-max-depth";
 const TRACE_RESULTS_TBODY_ID = "trace-results-body";
@@ -271,36 +266,6 @@ function renderTraceRows(rows: TraceRow[]): void {
   // from there. Programmatic .focus() is a no-op when the taskpane lacks
   // document focus, but the class-driven ring still renders.
   focusTraceRow(0);
-}
-
-function asFormulaCell(cell: CellFormula): string | null {
-  return typeof cell === "string" && cell.startsWith("=") ? cell : null;
-}
-
-function toFormulaConsistencyRows(formulasR1C1: CellFormula[][]): FormulaConsistencyCell[][] {
-  return formulasR1C1.map((row) =>
-    row.map((raw) => {
-      const formula = asFormulaCell(raw);
-      return {
-        isFormula: formula !== null,
-        formulaR1C1: formula ?? undefined
-      };
-    })
-  );
-}
-
-function applyConsistencyColor(cell: Excel.Range, mark: FormulaConsistencyMark): void {
-  const color =
-    mark === "consistent"
-      ? CONSISTENT_COLOR
-      : mark === "inconsistent"
-        ? INCONSISTENT_COLOR
-        : null;
-  if (color === null) return;
-  // Office.js requires fill.pattern to be set before color renders reliably
-  // on a previously-unfilled cell. See CLAUDE.md "Office.js gotchas".
-  cell.format.fill.pattern = "Solid";
-  cell.format.fill.color = color;
 }
 
 function makeFormatMatrix(rowCount: number, columnCount: number, formatCode: string): string[][] {
@@ -612,73 +577,21 @@ async function runErrorWrap(): Promise<void> {
   setStatus(`Error Wrap applied with fallback "${fallbackInput}".`);
 }
 
-function toSmartFillRows(values: CellValue[][], formulas: CellFormula[][]): SmartFillRow[] {
-  return values.map((rowValues, r) =>
-    rowValues.map((value, c) => {
-      const formula = asFormulaCell(formulas[r][c]);
-      const isEmpty = formula === null && (value === null || value === "");
-      return {
-        isEmpty,
-        isMerged: false
-      };
-    })
-  );
-}
-
 async function runSmartFillRight(): Promise<void> {
-  await Excel.run(async (context) => {
-    const workbook = context.workbook;
-    const worksheet = workbook.worksheets.getActiveWorksheet();
-    const activeCell = workbook.getActiveCell();
-    const usedRange = worksheet.getUsedRangeOrNullObject();
-
-    activeCell.load(["rowIndex", "columnIndex", "formulas", "address"]);
-    usedRange.load(["isNullObject", "columnIndex", "columnCount"]);
-    await context.sync();
-
-    const activeFormula = asFormulaCell(activeCell.formulas[0][0] as CellFormula) ?? "";
-
-    const startRowIndex = Math.max(0, activeCell.rowIndex - 3);
-    const sampleRowCount = activeCell.rowIndex - startRowIndex + 1;
-
-    const usedLastColExclusive = usedRange.isNullObject ? activeCell.columnIndex + 1 : usedRange.columnIndex + usedRange.columnCount;
-    const sampleColCount = Math.max(1, Math.min(2000, usedLastColExclusive - activeCell.columnIndex));
-
-    const sample = worksheet.getRangeByIndexes(startRowIndex, activeCell.columnIndex, sampleRowCount, sampleColCount);
-    sample.load(["values", "formulas"]);
-    await context.sync();
-
-    const rows = toSmartFillRows(sample.values as CellValue[][], sample.formulas as CellFormula[][]);
-    const result = computeSmartFillRight(rows, {
-      row: sampleRowCount,
-      col: 1,
-      formula: activeFormula,
-      isMerged: false
-    });
-
-    if (!result.ok) {
-      if (result.reason === "active_cell_must_have_formula") {
-        setStatus(`Smart Fill Right skipped: active cell ${activeCell.address} has no formula.`);
-      } else if (result.reason === "active_cell_is_merged") {
-        setStatus(`Smart Fill Right skipped: active cell ${activeCell.address} is merged.`);
-      } else {
-        setStatus(`Smart Fill Right skipped: no boundary found within 3 rows above ${activeCell.address}.`);
-      }
-      return;
+  const result = await applySmartFillRightAction();
+  if (!result.ok) {
+    if (result.reason === "no_formula") {
+      setStatus(`Smart Fill Right skipped: active cell ${result.address} has no formula.`);
+    } else if (result.reason === "merged") {
+      setStatus(`Smart Fill Right skipped: active cell ${result.address} is merged.`);
+    } else {
+      setStatus(
+        `Smart Fill Right skipped: no boundary found within 3 rows above ${result.address}.`
+      );
     }
-
-    const boundaryAbsCol = activeCell.columnIndex + (result.boundaryCol - 1);
-    const destination = worksheet.getRangeByIndexes(
-      activeCell.rowIndex,
-      activeCell.columnIndex,
-      1,
-      boundaryAbsCol - activeCell.columnIndex + 1
-    );
-
-    destination.copyFrom(activeCell, Excel.RangeCopyType.formulas);
-    await context.sync();
-    setStatus(`Smart Fill Right applied through column ${boundaryAbsCol + 1}.`);
-  });
+    return;
+  }
+  setStatus(`Smart Fill Right applied through column ${result.boundaryColumn1Based}.`);
 }
 
 async function runCagr(): Promise<void> {
@@ -715,43 +628,14 @@ async function runCagr(): Promise<void> {
 }
 
 async function runFormulaConsistency(): Promise<void> {
-  // Single-shot apply: green/red fills for consistent/inconsistent formula
-  // cells. No persistent state — Ctrl+Z reverses the action in one step, and
-  // the previously-persisted restore-state broke Excel's undo chain on
-  // Desktop (see CLAUDE.md Office.js gotchas).
-  await Excel.run(async (context) => {
-    const range = context.workbook.getSelectedRange();
-    range.load(["formulasR1C1", "rowCount", "columnCount", "address"]);
-    await context.sync();
-
-    const rows = toFormulaConsistencyRows(range.formulasR1C1 as CellFormula[][]);
-    const marks = analyzeHorizontalFormulaConsistency(rows);
-
-    let consistentCount = 0;
-    let inconsistentCount = 0;
-    let applied = false;
-
-    for (let r = 0; r < range.rowCount; r += 1) {
-      for (let c = 0; c < range.columnCount; c += 1) {
-        const mark = marks[r][c];
-        if (mark === "none") continue;
-        applyConsistencyColor(range.getCell(r, c), mark);
-        applied = true;
-        if (mark === "consistent") consistentCount += 1;
-        else inconsistentCount += 1;
-      }
-    }
-
-    if (!applied) {
-      setStatus(`Formula Consistency found no formula cells to mark in ${range.address}.`);
-      return;
-    }
-
-    await context.sync();
-    setStatus(
-      `Formula Consistency applied on ${range.address} (consistent: ${consistentCount}, inconsistent: ${inconsistentCount}). Ctrl+Z to remove.`
-    );
-  });
+  const result = await applyFormulaConsistencyAction();
+  if (!result.applied) {
+    setStatus(`Formula Consistency found no formula cells to mark in ${result.address}.`);
+    return;
+  }
+  setStatus(
+    `Formula Consistency applied on ${result.address} (consistent: ${result.consistent}, inconsistent: ${result.inconsistent}). Ctrl+Z to remove.`
+  );
 }
 
 async function guardedRun(action: () => Promise<void>): Promise<void> {
