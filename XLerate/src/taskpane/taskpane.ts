@@ -31,6 +31,11 @@ import {
   applyFormulaConsistencyAction,
   applySmartFillRightAction,
 } from "./workbookActions";
+import {
+  readTextStyleCycleIndex,
+  resetTextStyleCycleIndex,
+  writeTextStyleCycleIndex,
+} from "./cycleStateStorage";
 
 type CellValue = string | number | boolean | null;
 const FORMAT_SETTINGS_EDITOR_ID = "format-settings-json";
@@ -44,13 +49,13 @@ const BORDER_SIDE_ITEMS = [
 ] as const;
 type BorderSideItem = (typeof BORDER_SIDE_ITEMS)[number];
 
-// Session-scoped per spec §4.2 — not persisted across workbook reopens.
-// Persisting cycle state via Office.context.document.settings.saveAsync would
-// break the native Excel undo chain on Desktop (any click on the sheet after
-// the cycle flushes the undo boundary), so we deliberately keep cycle
-// position in memory only. The cell-format cycle infers position from the
-// current cell's formatting and does not need an index at all.
-let textStyleCycleIndex = -1;
+// Text-style cycle index lives in src/taskpane/cycleStateStorage.ts
+// (window.localStorage under a versioned key) so the ribbon button's
+// commands runtime and the taskpane stay in sync. Saving via
+// Office.context.document.settings.saveAsync would break the Excel
+// undo chain on Desktop; localStorage is session-scoped and doesn't
+// touch the workbook. Cell-format / date-format / number-format
+// cycles infer position from the current cell and need no index.
 
 function setStatus(message: string): void {
   const target = document.getElementById("status-text");
@@ -404,13 +409,13 @@ function readResolvedFormatSettings(): ResolvedFormatSettings {
 async function clearFormatSettingsAndCycleState(): Promise<void> {
   Office.context.document.settings.remove(FORMAT_SETTINGS_KEY);
   await saveDocumentSettingsAsync();
-  textStyleCycleIndex = -1;
+  resetTextStyleCycleIndex();
 }
 
 async function writeFormatSettingsAndResetCycleState(settings: ResolvedFormatSettings): Promise<void> {
   Office.context.document.settings.set(FORMAT_SETTINGS_KEY, JSON.stringify(settings));
   await saveDocumentSettingsAsync();
-  textStyleCycleIndex = -1;
+  resetTextStyleCycleIndex();
 }
 
 
@@ -514,10 +519,10 @@ async function runCycleTextStyle(): Promise<void> {
   const formatSettings = readResolvedFormatSettings();
   const { index } = await runCycleTextStyleService(
     new ExcelPortLive(),
-    textStyleCycleIndex,
+    readTextStyleCycleIndex(),
     formatSettings.textStyles,
   );
-  textStyleCycleIndex = index;
+  writeTextStyleCycleIndex(index);
   setStatus("Cycled text style.");
 }
 
