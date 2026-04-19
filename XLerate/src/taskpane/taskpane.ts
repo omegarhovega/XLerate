@@ -28,7 +28,7 @@ import {
 } from "../core/traceUtils";
 import { buildTrace, type TraceCellInfo, type TraceRow } from "../core/traceBuilder";
 import {
-  getDirectTraceNeighbors,
+  getAllDirectTraceNeighbors,
   loadTraceCellProperties,
   snapshotRangeForTrace,
 } from "./traceExcelNeighbors";
@@ -463,16 +463,19 @@ async function runTrace(direction: TraceDirection): Promise<void> {
     const root = snapshotRangeForTrace(rootRange);
     const maxDepth = getTraceMaxDepthInputValue();
 
-    const getNeighbors = async (info: TraceCellInfo): Promise<TraceCellInfo[]> => {
-      const worksheet = context.workbook.worksheets.getItem(info.worksheetName);
-      const cell = worksheet.getRangeByIndexes(info.rowIndex, info.columnIndex, 1, 1);
-      const neighbors = await getDirectTraceNeighbors(context, cell, direction);
-      // getDirectTraceNeighbors already loaded the address / worksheet/name
-      // / rowIndex / columnIndex / values / formulas on each neighbor Range.
-      return neighbors.map(snapshotRangeForTrace);
+    // Batched per-level neighbor lookup: one sync pair per BFS level
+    // regardless of breadth. See getAllDirectTraceNeighbors for the
+    // round-trip accounting.
+    const getAllNeighbors = async (cells: TraceCellInfo[]): Promise<TraceCellInfo[][]> => {
+      const ranges = cells.map((info) => {
+        const worksheet = context.workbook.worksheets.getItem(info.worksheetName);
+        return worksheet.getRangeByIndexes(info.rowIndex, info.columnIndex, 1, 1);
+      });
+      const neighborLists = await getAllDirectTraceNeighbors(context, ranges, direction);
+      return neighborLists.map((list) => list.map(snapshotRangeForTrace));
     };
 
-    const { rows, truncated } = await buildTrace({ root, maxDepth, getNeighbors });
+    const { rows, truncated } = await buildTrace({ root, maxDepth, getAllNeighbors });
 
     renderTraceRows(rows);
     setStatus(

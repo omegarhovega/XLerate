@@ -12,13 +12,24 @@ function cell(
   return { worksheetName, rowIndex, columnIndex, address, value, formula };
 }
 
+/**
+ * Adapts a per-cell-address neighbor map into the batched
+ * `getAllNeighbors(cells[]) => cells[][]` shape. Tests retain readable
+ * per-cell wiring while exercising the post-batching builder signature.
+ */
+function batched(
+  map: Map<string, TraceCellInfo[]>
+): (cells: TraceCellInfo[]) => Promise<TraceCellInfo[][]> {
+  return async (cells) => cells.map((c) => map.get(c.address) ?? []);
+}
+
 describe("buildTrace", () => {
   it("returns just the root when no neighbors are produced", async () => {
     const root = cell("Sheet1!A1", 0, 0, 42);
     const result = await buildTrace({
       root,
       maxDepth: 5,
-      getNeighbors: async () => [],
+      getAllNeighbors: async () => [[]],
     });
     expect(result.rows).toEqual([{ level: 0, address: "Sheet1!A1", value: "42", formula: "" }]);
     expect(result.truncated).toBe(false);
@@ -40,7 +51,7 @@ describe("buildTrace", () => {
     const result = await buildTrace({
       root: a,
       maxDepth: 10,
-      getNeighbors: async (c) => neighborMap.get(c.address) ?? [],
+      getAllNeighbors: batched(neighborMap),
     });
 
     expect(result.rows.map((r) => ({ level: r.level, address: r.address }))).toEqual([
@@ -66,7 +77,7 @@ describe("buildTrace", () => {
     const result = await buildTrace({
       root: a,
       maxDepth: 1,
-      getNeighbors: async (c) => neighborMap.get(c.address) ?? [],
+      getAllNeighbors: batched(neighborMap),
     });
 
     expect(result.rows.map((r) => r.address)).toEqual(["Sheet1!A1", "Sheet1!B1"]);
@@ -84,7 +95,7 @@ describe("buildTrace", () => {
     const result = await buildTrace({
       root: a,
       maxDepth: 10,
-      getNeighbors: async (c) => neighborMap.get(c.address) ?? [],
+      getAllNeighbors: batched(neighborMap),
     });
 
     expect(result.rows.map((r) => r.address)).toEqual(["Sheet1!A1", "Sheet1!B1"]);
@@ -101,7 +112,7 @@ describe("buildTrace", () => {
     const result = await buildTrace({
       root: a,
       maxDepth: 10,
-      getNeighbors: async (c) => neighborMap.get(c.address) ?? [],
+      getAllNeighbors: batched(neighborMap),
     });
 
     expect(result.rows.map((r) => r.address)).toEqual([
@@ -119,7 +130,8 @@ describe("buildTrace", () => {
       root,
       maxDepth: 10,
       maxRows: 3, // root + 2 siblings
-      getNeighbors: async (c) => (c.address === "Sheet1!A1" ? siblings : []),
+      getAllNeighbors: async (cells) =>
+        cells.map((c) => (c.address === "Sheet1!A1" ? siblings : [])),
     });
 
     expect(result.rows.map((r) => r.address)).toEqual(["Sheet1!A1", "Sheet1!B1", "Sheet1!B2"]);
@@ -136,7 +148,7 @@ describe("buildTrace", () => {
       formula: [["=SUM(B1:B5)"]],
     };
 
-    const result = await buildTrace({ root, maxDepth: 0, getNeighbors: async () => [] });
+    const result = await buildTrace({ root, maxDepth: 0, getAllNeighbors: async () => [[]] });
     expect(result.rows[0]).toEqual({
       level: 0,
       address: "Sheet1!A1",
@@ -158,8 +170,43 @@ describe("buildTrace", () => {
     const result = await buildTrace({
       root: a,
       maxDepth: 1,
-      getNeighbors: async (c) => neighborMap.get(c.address) ?? [],
+      getAllNeighbors: batched(neighborMap),
     });
     expect(result.rows.map((r) => r.address)).toEqual(["Sheet1!A1", "Sheet1!B1"]);
+  });
+
+  it("batches: all cells at one level are passed together to getAllNeighbors, then all at the next", async () => {
+    // Root -> [B, C, D] at level 1; B -> [E]; C -> [F, G]; D -> [H] at level 2.
+    // Expect exactly TWO calls to getAllNeighbors: once with [root], once with [B, C, D].
+    const root = cell("Sheet1!A1", 0, 0);
+    const b = cell("Sheet1!B1", 0, 1);
+    const c = cell("Sheet1!C1", 0, 2);
+    const d = cell("Sheet1!D1", 0, 3);
+    const e = cell("Sheet1!E1", 0, 4);
+    const f = cell("Sheet1!F1", 0, 5);
+    const g = cell("Sheet1!G1", 0, 6);
+    const h = cell("Sheet1!H1", 0, 7);
+
+    const calls: string[][] = [];
+    const neighborMap = new Map<string, TraceCellInfo[]>([
+      ["Sheet1!A1", [b, c, d]],
+      ["Sheet1!B1", [e]],
+      ["Sheet1!C1", [f, g]],
+      ["Sheet1!D1", [h]],
+    ]);
+
+    const result = await buildTrace({
+      root,
+      maxDepth: 2,
+      getAllNeighbors: async (cells) => {
+        calls.push(cells.map((x) => x.address));
+        return cells.map((x) => neighborMap.get(x.address) ?? []);
+      },
+    });
+
+    expect(calls).toEqual([["Sheet1!A1"], ["Sheet1!B1", "Sheet1!C1", "Sheet1!D1"]]);
+    expect(result.rows.map((r) => r.address).sort()).toEqual(
+      ["Sheet1!A1", "Sheet1!B1", "Sheet1!C1", "Sheet1!D1", "Sheet1!E1", "Sheet1!F1", "Sheet1!G1", "Sheet1!H1"].sort()
+    );
   });
 });

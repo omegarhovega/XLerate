@@ -43,8 +43,15 @@ export type TraceBuilderInput = {
   maxDepth: number;
   /** Hard cap on total rows, including the root. Defaults to `MAX_TRACE_ROWS`. */
   maxRows?: number;
-  /** Returns the direct precedents (or dependents) of the given cell. */
-  getNeighbors: (cell: TraceCellInfo) => Promise<TraceCellInfo[]>;
+  /**
+   * Returns neighbors for every cell in `cells`, batched. `result[i]`
+   * is the neighbor list of `cells[i]`. Batching is the whole point of
+   * this signature: the live implementation does one `context.sync()`
+   * pair per BFS level instead of one per cell, turning O(N) Office.js
+   * round-trips into O(depth). Test doubles can ignore batching and
+   * just return per-cell lists; correctness is identical.
+   */
+  getAllNeighbors: (cells: TraceCellInfo[]) => Promise<TraceCellInfo[][]>;
 };
 
 export type TraceBuilderResult = {
@@ -63,43 +70,54 @@ export function toTraceRow(cell: TraceCellInfo, level: number): TraceRow {
 }
 
 /**
- * Pure BFS over the trace graph. The Office.js-specific neighbor lookup is
- * passed in via `getNeighbors` so this function is testable without any
- * Excel runtime. Cycle prevention uses `(worksheetName, rowIndex,
- * columnIndex)`; depth / row caps match the pre-refactor behavior of
- * `runTrace` in `taskpane.ts`.
+ * Pure BFS over the trace graph, processing one BFS level per round-trip
+ * through `getAllNeighbors`. Visitation order and truncation semantics
+ * match the pre-batching behavior of the prior signature — the only
+ * observable change is that all cells at depth N are passed to the
+ * neighbor callback together, so a live Office.js caller can batch
+ * their loads. Cycle prevention uses `(worksheetName, rowIndex,
+ * columnIndex)`; row cap wins over depth cap when both apply.
  */
 export async function buildTrace(input: TraceBuilderInput): Promise<TraceBuilderResult> {
-  const { root, maxDepth, getNeighbors } = input;
+  const { root, maxDepth, getAllNeighbors } = input;
   const maxRows = input.maxRows ?? MAX_TRACE_ROWS;
 
   const rows: TraceRow[] = [toTraceRow(root, 0)];
   const visited = new Set<string>([
     buildTraceCellKey(root.worksheetName, root.rowIndex, root.columnIndex),
   ]);
-  const queue: Array<{ level: number; cell: TraceCellInfo }> = [{ level: 0, cell: root }];
   let truncated = false;
 
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current) break;
-    if (current.level >= maxDepth) continue;
+  // At each iteration, `currentLevelCells` holds all cells at depth
+  // `level`, in the order they were first discovered. We ask for all
+  // their neighbors in one call, then promote novel neighbors to the
+  // next level.
+  let currentLevelCells: TraceCellInfo[] = [root];
+  for (let level = 0; level < maxDepth && currentLevelCells.length > 0 && !truncated; level += 1) {
+    const neighborLists = await getAllNeighbors(currentLevelCells);
+    const nextLevelCells: TraceCellInfo[] = [];
 
-    const neighbors = await getNeighbors(current.cell);
-    for (const neighbor of neighbors) {
-      const key = buildTraceCellKey(neighbor.worksheetName, neighbor.rowIndex, neighbor.columnIndex);
-      if (visited.has(key)) continue;
-      visited.add(key);
+    for (let i = 0; i < neighborLists.length && !truncated; i += 1) {
+      const neighbors = neighborLists[i] ?? [];
+      for (const neighbor of neighbors) {
+        const key = buildTraceCellKey(
+          neighbor.worksheetName,
+          neighbor.rowIndex,
+          neighbor.columnIndex
+        );
+        if (visited.has(key)) continue;
+        visited.add(key);
 
-      rows.push(toTraceRow(neighbor, current.level + 1));
-      if (rows.length >= maxRows) {
-        truncated = true;
-        break;
+        rows.push(toTraceRow(neighbor, level + 1));
+        if (rows.length >= maxRows) {
+          truncated = true;
+          break;
+        }
+        nextLevelCells.push(neighbor);
       }
-      queue.push({ level: current.level + 1, cell: neighbor });
     }
 
-    if (truncated) break;
+    currentLevelCells = nextLevelCells;
   }
 
   return { rows, truncated };

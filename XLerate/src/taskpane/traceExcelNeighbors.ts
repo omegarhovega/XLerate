@@ -52,58 +52,140 @@ function isItemNotFoundError(error: unknown): boolean {
   return typeof maybe.message === "string" && maybe.message.includes("ItemNotFound");
 }
 
+const AREA_ITEMS_LOAD_SPEC =
+  "items/address,rowIndex,columnIndex,rowCount,columnCount,worksheet/name,values,formulas";
+
 /**
- * Fetch the direct precedents or dependents of `source`. Expands
- * multi-cell precedent areas into individual cells so the BFS can
- * traverse them one at a time. Returns empty when Office.js reports no
- * links (or when the underlying link enumeration throws ItemNotFound,
- * which Excel uses for "no links found" on some hosts).
+ * Fetch direct precedents (or dependents) for every cell in `sources`
+ * using at most three `context.sync()` round-trips regardless of how
+ * many sources are passed. For an N-cell BFS level this replaces the
+ * previous O(N) per-cell implementation with O(1) syncs, which is the
+ * primary speedup on Excel Desktop where each sync is ~10–50 ms.
+ *
+ * Returns a parallel array: `result[i]` is the neighbor list of
+ * `sources[i]`. Empty source array returns `[]`.
+ *
+ * Fallback path: if the batched sync throws `ItemNotFound` — Excel
+ * uses that code on some hosts when *any* source has no links —
+ * transparently fall back to per-source syncs so the cells with links
+ * still return them. The fallback is slower but only trips on empty
+ * sources; the common "everything has precedents" case stays on the
+ * fast path.
+ *
+ * Multi-cell link areas are expanded into individual cells so the BFS
+ * can traverse them. Expansion requires a third sync because the sub
+ * cells' properties aren't loaded as part of the area itself; that
+ * sync only fires when at least one multi-cell area was seen.
  */
-export async function getDirectTraceNeighbors(
+export async function getAllDirectTraceNeighbors(
   context: Excel.RequestContext,
-  source: Excel.Range,
+  sources: Excel.Range[],
   direction: TraceDirection
-): Promise<Excel.Range[]> {
-  const links =
-    direction === "precedents" ? source.getDirectPrecedents() : source.getDirectDependents();
-  links.areas.load("items");
+): Promise<Excel.Range[][]> {
+  if (sources.length === 0) return [];
+
+  const linksList = sources.map((s) =>
+    direction === "precedents" ? s.getDirectPrecedents() : s.getDirectDependents()
+  );
+  linksList.forEach((l) => l.areas.load("items"));
 
   try {
     await context.sync();
   } catch (error) {
-    if (isItemNotFoundError(error)) return [];
+    if (isItemNotFoundError(error)) {
+      return getAllDirectTraceNeighborsFallback(context, sources, direction);
+    }
     throw error;
   }
 
-  for (const bySheet of links.areas.items) {
-    bySheet.areas.load(
-      "items/address,rowIndex,columnIndex,rowCount,columnCount,worksheet/name,values,formulas"
-    );
+  // Queue per-cell area loads for every source in one shot.
+  for (const links of linksList) {
+    for (const bySheet of links.areas.items) {
+      bySheet.areas.load(AREA_ITEMS_LOAD_SPEC);
+    }
   }
   await context.sync();
 
-  const neighbors: Excel.Range[] = [];
+  const result: Excel.Range[][] = [];
   let expanded = false;
 
-  for (const bySheet of links.areas.items) {
-    for (const area of bySheet.areas.items) {
-      if (area.rowCount === 1 && area.columnCount === 1) {
-        neighbors.push(area);
-        continue;
-      }
-      for (let r = 0; r < area.rowCount; r += 1) {
-        for (let c = 0; c < area.columnCount; c += 1) {
-          const cell = area.getCell(r, c);
-          loadTraceCellProperties(cell);
-          neighbors.push(cell);
-          expanded = true;
+  for (const links of linksList) {
+    const neighbors: Excel.Range[] = [];
+    for (const bySheet of links.areas.items) {
+      for (const area of bySheet.areas.items) {
+        if (area.rowCount === 1 && area.columnCount === 1) {
+          neighbors.push(area);
+          continue;
+        }
+        for (let r = 0; r < area.rowCount; r += 1) {
+          for (let c = 0; c < area.columnCount; c += 1) {
+            const cell = area.getCell(r, c);
+            loadTraceCellProperties(cell);
+            neighbors.push(cell);
+            expanded = true;
+          }
         }
       }
     }
+    result.push(neighbors);
   }
 
   if (expanded) await context.sync();
-  return neighbors;
+  return result;
+}
+
+/**
+ * Per-source fallback for when the batched sync threw ItemNotFound.
+ * Syncs once per source, isolating the empty ones so the rest still
+ * succeed. Only reached on hosts/situations that surface ItemNotFound;
+ * on modern Excel Desktop this is rare.
+ */
+async function getAllDirectTraceNeighborsFallback(
+  context: Excel.RequestContext,
+  sources: Excel.Range[],
+  direction: TraceDirection
+): Promise<Excel.Range[][]> {
+  const out: Excel.Range[][] = [];
+  for (const source of sources) {
+    const links =
+      direction === "precedents" ? source.getDirectPrecedents() : source.getDirectDependents();
+    links.areas.load("items");
+    try {
+      await context.sync();
+    } catch (err) {
+      if (isItemNotFoundError(err)) {
+        out.push([]);
+        continue;
+      }
+      throw err;
+    }
+    for (const bySheet of links.areas.items) {
+      bySheet.areas.load(AREA_ITEMS_LOAD_SPEC);
+    }
+    await context.sync();
+
+    const neighbors: Excel.Range[] = [];
+    let expanded = false;
+    for (const bySheet of links.areas.items) {
+      for (const area of bySheet.areas.items) {
+        if (area.rowCount === 1 && area.columnCount === 1) {
+          neighbors.push(area);
+          continue;
+        }
+        for (let r = 0; r < area.rowCount; r += 1) {
+          for (let c = 0; c < area.columnCount; c += 1) {
+            const cell = area.getCell(r, c);
+            loadTraceCellProperties(cell);
+            neighbors.push(cell);
+            expanded = true;
+          }
+        }
+      }
+    }
+    if (expanded) await context.sync();
+    out.push(neighbors);
+  }
+  return out;
 }
 
 /**
