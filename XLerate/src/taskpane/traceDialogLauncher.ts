@@ -70,21 +70,23 @@ function logTracePerf(label: string): void {
  *    to make the worksheet the active rectangle, which on Desktop
  *    pulls grid focus once the taskpane is no longer holding it.
  *
- * This must run AFTER the browser has actually returned focus to the
- * taskpane (i.e. after the dialog's close has settled). The caller
- * wires it into the Office Dialog `DialogEventReceived` event, not
- * into the synchronous `closeActiveDialog()` flow — an earlier
- * implementation fired this immediately after `dialog.close()` and
- * lost the race against the browser's own post-close focus return.
+ * This must run AFTER the browser has returned focus to the taskpane
+ * iframe — if we run synchronously right after `dialog.close()`, the
+ * return happens later and overrides our blur + activate. The caller
+ * defers via `setTimeout` for this reason.
  */
 async function pullFocusToGrid(): Promise<void> {
   try {
+    // eslint-disable-next-line no-console
+    console.log("[trace-focus] pullFocusToGrid start; activeElement =", document?.activeElement);
     if (typeof document !== "undefined") {
       const active = document.activeElement as HTMLElement | null;
       if (active && typeof active.blur === "function") {
         active.blur();
       }
     }
+    // eslint-disable-next-line no-console
+    console.log("[trace-focus] after blur; activeElement =", document?.activeElement);
     await Excel.run(async (context) => {
       const cell = context.workbook.getActiveCell();
       cell.load("worksheet/name");
@@ -93,9 +95,33 @@ async function pullFocusToGrid(): Promise<void> {
       cell.select();
       await context.sync();
     });
-  } catch {
+    // eslint-disable-next-line no-console
+    console.log("[trace-focus] after Excel.run; activeElement =", document?.activeElement);
+    // Also peek 500ms later to see where focus actually ended up.
+    setTimeout(() => {
+      // eslint-disable-next-line no-console
+      console.log("[trace-focus] +500ms; activeElement =", document?.activeElement);
+    }, 500);
+  } catch (err) {
     // Non-fatal: worst case, user presses one key/click to resume.
+    // eslint-disable-next-line no-console
+    console.log("[trace-focus] pullFocusToGrid error", err);
   }
+}
+
+/**
+ * Schedule `pullFocusToGrid` after a short delay so the browser has
+ * time to complete its own post-close focus return (which puts focus
+ * on the taskpane iframe) BEFORE we try to pull it to the grid. The
+ * `activeDialog !== null` guard at fire time skips the case where a
+ * new dialog has opened in the meantime — we must never yank focus
+ * off a live dialog.
+ */
+function schedulePullFocusToGrid(): void {
+  setTimeout(() => {
+    if (activeDialog !== null) return;
+    void pullFocusToGrid();
+  }, 50);
 }
 
 function closeActiveDialog(): void {
@@ -108,9 +134,7 @@ function closeActiveDialog(): void {
     }
     activeDialog = null;
     pendingCompute = null;
-    // Focus return is triggered from DialogEventReceived rather than
-    // here so it runs after the browser has finished returning focus
-    // to the taskpane iframe; see pullFocusToGrid's docstring.
+    schedulePullFocusToGrid();
   }
 }
 
@@ -378,17 +402,17 @@ export async function openTraceDialog(
         activeDialog = thisDialog;
         thisDialog.addEventHandler(Office.EventType.DialogMessageReceived, handleDialogMessage);
         thisDialog.addEventHandler(Office.EventType.DialogEventReceived, () => {
-          // When a second openTraceDialog supersedes this one,
-          // activeDialog has already been reassigned to the newer
-          // instance before this close event fires. Skip both the
-          // null and the focus pull in that case — nulling would
-          // drop the reference to the live dialog, and pulling focus
-          // would yank it away from a dialog the user is about to
-          // interact with.
+          // Cleanup path for user-initiated close (X button, system close).
+          // closeActiveDialog() handles both the ref-nulling and the focus
+          // pull for the Esc-via-messageParent path; this handler covers
+          // the case where the dialog closed without us asking.
+          // The identity guard skips the case where a newer openTraceDialog
+          // superseded this dialog — in that case closeActiveDialog has
+          // already run and reassigned activeDialog to the newer instance.
           if (activeDialog !== thisDialog) return;
           activeDialog = null;
           pendingCompute = null;
-          void pullFocusToGrid();
+          schedulePullFocusToGrid();
         });
         resolve();
       }
