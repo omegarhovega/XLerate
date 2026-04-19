@@ -25,26 +25,50 @@
       background: #e6fbf8;
       box-shadow: inset 0 0 0 2px #00f2da;
     }
+    /* Tree indent + chevron. Indent width scales with --indent-level
+       (0 = root). The chevron sits between indent and the address
+       text; leaves get an invisible spacer so columns line up. */
+    .trace-address-cell { white-space: nowrap; }
+    .trace-indent {
+      display: inline-block;
+      width: calc(var(--indent-level, 0) * 16px);
+    }
+    .trace-chevron {
+      display: inline-block;
+      width: 14px;
+      cursor: pointer;
+      user-select: none;
+      text-align: center;
+      color: #888;
+      font-size: 10px;
+      line-height: 1;
+    }
+    .trace-chevron:hover { color: #0f5ea8; }
+    .trace-chevron-leaf {
+      color: #ccc;
+      cursor: default;
+      font-size: 8px;
+    }
+    .trace-address-text { margin-left: 4px; }
   </style>
 </head>
 <body>
   <header>
     <h1 id="trace-dialog-title">Trace</h1>
-    <span id="trace-dialog-hint">↑/↓ to navigate · Esc or Enter to close</span>
+    <span id="trace-dialog-hint">↑/↓ navigate · →/← expand/collapse · Enter or Esc to close</span>
   </header>
   <div class="trace-table-wrap">
     <table>
       <thead>
         <tr>
-          <th>Level</th>
-          <th>Address</th>
+          <th>Cell</th>
           <th>Value</th>
           <th>Formula</th>
         </tr>
       </thead>
-      <tbody id="trace-dialog-body" role="listbox" aria-label="Trace results">
+      <tbody id="trace-dialog-body" role="tree" aria-label="Trace results (↑/↓ navigate, → expand, ← collapse, Enter/Esc close)">
         <tr>
-          <td colspan="4">Loading…</td>
+          <td colspan="3">Loading…</td>
         </tr>
       </tbody>
     </table>

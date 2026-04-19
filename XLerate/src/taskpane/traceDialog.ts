@@ -6,29 +6,36 @@ import type { TraceRow } from "../core/traceBuilder";
 // https://learn.microsoft.com/en-us/office/dev/add-ins/develop/dialog-api-in-office-add-ins
 // documents the restriction ("cannot use host-specific APIs like Excel.run
 // or Word.run to interact with the host document"). So this file is pure
-// UI: it receives the pre-computed trace rows from the parent runtime
-// (taskpane or commands) via DialogParentMessageReceived, renders them,
-// handles keyboard navigation, and sends back navigate / close messages.
+// UI: it receives pre-computed trace rows from the parent runtime
+// (taskpane or commands) via DialogParentMessageReceived, renders them
+// as a tree, handles keyboard navigation, and sends back navigate / close
+// messages.
+//
+// Tree model (Phase C): rows carry parentAddress, visibility derives from
+// an expanded Set<address>. Default is all nodes expanded. User can
+// collapse/expand with chevron click or ArrowRight/Left. Progressive
+// setRows updates preserve the user's collapsed nodes.
 
 const BODY_ID = "trace-dialog-body";
 const STATUS_ID = "trace-dialog-status";
 const TITLE_ID = "trace-dialog-title";
-const ROW_INDEX_ATTR = "data-trace-index";
+const ROW_ADDRESS_ATTR = "data-trace-address";
 const ROW_FOCUSED_CLASS = "trace-row-focused";
+const CHEVRON_CLASS = "trace-chevron";
 
-// Keyboard-navigation state. `currentRows` mirrors what's rendered;
-// `currentFocusIndex` is the row that arrow keys operate on. Module-level:
-// the dialog is single-trace, single-window.
-let currentRows: TraceRow[] = [];
+// ---- Tree state ----
+// `allRows` carries everything received from the parent (regardless of
+// current expand/collapse state); `visibleRows` is the flattened list
+// of rows currently visible — what keyboard navigation operates on.
+// `expanded` tracks which addresses show their children. `childIndex`
+// is derived from allRows and used for O(1) parent→children lookups.
+let allRows: TraceRow[] = [];
+let visibleRows: TraceRow[] = [];
+let expanded = new Set<string>();
+let childIndex = new Map<string, TraceRow[]>();
 let currentFocusIndex: number | null = null;
 
 // ---- Perf instrumentation (remove when diagnosis is done). ----
-// Uses Date.now() so the dialog's timestamps line up with the parent
-// runtime's (separate performance.now() origins make relative times
-// otherwise incomparable across contexts). The `perfSession` query
-// param is set by the parent at click time; including it in each log
-// line lets the developer correlate dialog logs with parent logs when
-// multiple traces run close together.
 const perfSession = new URLSearchParams(window.location.search).get("perfSession") ?? "?";
 function logTracePerf(label: string): void {
   // eslint-disable-next-line no-console
@@ -54,14 +61,9 @@ function readDirectionFromUrl(): "precedents" | "dependents" {
 function getRowElements(): HTMLTableRowElement[] {
   const body = document.getElementById(BODY_ID);
   if (!(body instanceof HTMLTableSectionElement)) return [];
-  return Array.from(body.querySelectorAll<HTMLTableRowElement>(`tr[${ROW_INDEX_ATTR}]`));
+  return Array.from(body.querySelectorAll<HTMLTableRowElement>(`tr[${ROW_ADDRESS_ATTR}]`));
 }
 
-/**
- * Fire-and-forget notification to the parent runtime. `messageParent` is
- * synchronous on the dialog side — the dialog's window state isn't
- * affected and the caller doesn't need to await anything.
- */
 function sendToParent(
   message:
     | { action: "ready" }
@@ -75,6 +77,72 @@ function sendToParent(
     // next keystroke (or re-open) re-sends.
   }
 }
+
+// ---- Tree helpers ----
+
+function rebuildChildIndex(): void {
+  childIndex = new Map();
+  for (const row of allRows) {
+    if (row.parentAddress !== null) {
+      const list = childIndex.get(row.parentAddress) ?? [];
+      list.push(row);
+      childIndex.set(row.parentAddress, list);
+    }
+  }
+}
+
+function rowHasChildren(row: TraceRow): boolean {
+  return (childIndex.get(row.address) ?? []).length > 0;
+}
+
+function findRootRow(): TraceRow | null {
+  return allRows.find((r) => r.parentAddress === null) ?? null;
+}
+
+/**
+ * Recompute `visibleRows` by DFS-traversing `allRows` from the root
+ * and descending into children only through `expanded` nodes. Stable
+ * with respect to BFS discovery order: siblings appear in the order
+ * they were first discovered.
+ */
+function computeVisibleRows(): void {
+  visibleRows = [];
+  const root = findRootRow();
+  if (!root) return;
+
+  const walk = (node: TraceRow): void => {
+    visibleRows.push(node);
+    if (!expanded.has(node.address)) return;
+    const children = childIndex.get(node.address) ?? [];
+    for (const child of children) walk(child);
+  };
+  walk(root);
+}
+
+function findVisibleIndexByAddress(addr: string): number {
+  return visibleRows.findIndex((r) => r.address === addr);
+}
+
+/**
+ * Walk parent pointers until we find an ancestor that is currently
+ * visible. Used when the focused row is hidden by a collapse (its
+ * ancestor collapsed), so focus can land on the nearest visible
+ * ancestor instead of vanishing.
+ */
+function findNearestVisibleAncestor(addr: string): string | null {
+  const rowsByAddress = new Map(allRows.map((r) => [r.address, r]));
+  let current = rowsByAddress.get(addr);
+  while (current && current.parentAddress !== null) {
+    const parent = rowsByAddress.get(current.parentAddress);
+    if (parent && findVisibleIndexByAddress(parent.address) >= 0) {
+      return parent.address;
+    }
+    current = parent;
+  }
+  return null;
+}
+
+// ---- Rendering ----
 
 function focusRow(targetIndex: number, options: { announce?: boolean } = {}): void {
   const elements = getRowElements();
@@ -92,19 +160,171 @@ function focusRow(targetIndex: number, options: { announce?: boolean } = {}): vo
   target.focus();
   target.scrollIntoView({ block: "nearest" });
 
-  // Live-nav: tell the parent to move Excel's active cell. Skipped on the
-  // initial render because the dialog opens on the user's current active
-  // cell anyway — redundant AND would fire before the parent has a chance
-  // to listen on the very first frame.
   if (options.announce !== false) {
-    const row = currentRows[clamped];
+    const row = visibleRows[clamped];
     if (row) sendToParent({ action: "navigate", address: row.address });
   }
 }
 
+function createTreeRow(row: TraceRow): HTMLTableRowElement {
+  const tr = document.createElement("tr");
+  tr.className = "trace-row-clickable";
+  tr.setAttribute("role", "treeitem");
+  tr.setAttribute("tabindex", "0");
+  tr.setAttribute("aria-level", String(row.level + 1));
+  tr.setAttribute(ROW_ADDRESS_ATTR, row.address);
+  tr.setAttribute("aria-selected", "false");
+
+  const hasChildren = rowHasChildren(row);
+  const isExpanded = expanded.has(row.address);
+  if (hasChildren) {
+    tr.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+  }
+
+  const addressTd = document.createElement("td");
+  addressTd.className = "trace-address-cell";
+
+  // Indent spacer: CSS reads --indent-level to compute the width.
+  const indent = document.createElement("span");
+  indent.className = "trace-indent";
+  indent.style.setProperty("--indent-level", String(row.level));
+  addressTd.appendChild(indent);
+
+  // Chevron (or invisible spacer for leaves, to keep alignment).
+  const chevron = document.createElement("span");
+  chevron.className = CHEVRON_CLASS;
+  if (hasChildren) {
+    chevron.textContent = isExpanded ? "▼" : "▶";
+    chevron.setAttribute("role", "button");
+    chevron.setAttribute("aria-label", isExpanded ? "Collapse" : "Expand");
+    chevron.addEventListener("click", (event) => {
+      // Don't let the click bubble to the row handler (which would
+      // navigate Excel's selection). Chevron clicks only toggle the
+      // tree; they don't change the Excel active cell.
+      event.stopPropagation();
+      toggleExpanded(row.address, { fromUser: true });
+    });
+  } else {
+    chevron.classList.add("trace-chevron-leaf");
+    chevron.textContent = "•";
+    chevron.setAttribute("aria-hidden", "true");
+  }
+  addressTd.appendChild(chevron);
+
+  const addressText = document.createElement("span");
+  addressText.className = "trace-address-text";
+  addressText.textContent = row.address;
+  addressTd.appendChild(addressText);
+
+  const valueTd = document.createElement("td");
+  valueTd.textContent = row.value;
+  const formulaTd = document.createElement("td");
+  formulaTd.textContent = row.formula;
+
+  tr.append(addressTd, valueTd, formulaTd);
+
+  tr.addEventListener("click", () => {
+    sendToParent({ action: "navigate", address: row.address });
+  });
+
+  return tr;
+}
+
+function renderTree(options: { preserveFocus?: boolean } = {}): void {
+  const body = document.getElementById(BODY_ID);
+  if (!(body instanceof HTMLTableSectionElement)) return;
+
+  // Remember the focused row's address so a re-render (progressive
+  // update, expand/collapse) can restore focus to the same logical
+  // position rather than snapping back to row 0.
+  const focusedAddress =
+    options.preserveFocus && currentFocusIndex !== null && currentFocusIndex < visibleRows.length
+      ? visibleRows[currentFocusIndex].address
+      : null;
+
+  computeVisibleRows();
+
+  body.textContent = "";
+  currentFocusIndex = null;
+
+  if (visibleRows.length === 0) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 3;
+    td.textContent = "No trace results.";
+    tr.appendChild(td);
+    body.appendChild(tr);
+    return;
+  }
+
+  for (const row of visibleRows) {
+    body.appendChild(createTreeRow(row));
+  }
+
+  logTracePerf(`t7b tree.rendered visible=${visibleRows.length} total=${allRows.length}`);
+
+  // Restore focus: prefer the previously-focused address; if collapsed
+  // out of view, fall back to nearest visible ancestor; otherwise row 0.
+  let focusTarget = 0;
+  if (focusedAddress !== null) {
+    const directIdx = findVisibleIndexByAddress(focusedAddress);
+    if (directIdx >= 0) {
+      focusTarget = directIdx;
+    } else {
+      const ancestor = findNearestVisibleAncestor(focusedAddress);
+      if (ancestor !== null) {
+        const ancestorIdx = findVisibleIndexByAddress(ancestor);
+        if (ancestorIdx >= 0) focusTarget = ancestorIdx;
+      }
+    }
+  }
+  // announce=false: expand/collapse and progressive re-render shouldn't
+  // fire navigate on their own. Explicit keyboard movements do.
+  focusRow(focusTarget, { announce: false });
+  if (focusTarget === 0 && focusedAddress === null) {
+    logTracePerf("t8 row0.focused");
+  }
+}
+
+/**
+ * Toggle a node's expansion state. `fromUser=true` means it was a
+ * direct user action (click or arrow key), so we re-render with focus
+ * preserved on the toggled node. Used by both chevron-click and the
+ * keyboard handler.
+ */
+function toggleExpanded(address: string, options: { fromUser?: boolean } = {}): void {
+  if (expanded.has(address)) {
+    expanded.delete(address);
+  } else {
+    expanded.add(address);
+  }
+  // If the user toggled, their conceptual focus is on the toggled
+  // node; make sure we land focus there after re-render even if they
+  // were focused on a child that's now hidden.
+  if (options.fromUser) {
+    // Seed focus via the visibleRows index of the toggled node after
+    // recompute. Simplest: set currentFocusIndex = -1 before render
+    // so preservation picks up the address → ancestor fallback.
+    // But we can also just re-render and re-focus explicitly.
+  }
+  renderTree({ preserveFocus: true });
+  // If the user explicitly toggled a node they weren't focused on,
+  // preserve their existing focus. If they toggled the currently
+  // focused node, focus stays. Either way the preserveFocus path
+  // handles it.
+  if (options.fromUser) {
+    const idx = findVisibleIndexByAddress(address);
+    if (idx >= 0) focusRow(idx, { announce: false });
+  }
+}
+
+// ---- Keyboard ----
+
 function handleDialogKeydown(event: KeyboardEvent): void {
-  if (currentRows.length === 0) return;
+  if (visibleRows.length === 0) return;
   const i = currentFocusIndex ?? 0;
+  const focusedRow = visibleRows[i];
+
   switch (event.key) {
     case "ArrowDown":
       event.preventDefault();
@@ -120,8 +340,38 @@ function handleDialogKeydown(event: KeyboardEvent): void {
       break;
     case "End":
       event.preventDefault();
-      focusRow(currentRows.length - 1);
+      focusRow(visibleRows.length - 1);
       break;
+    case "ArrowRight": {
+      event.preventDefault();
+      if (!focusedRow) break;
+      const hasKids = rowHasChildren(focusedRow);
+      if (!hasKids) break; // leaf: no-op
+      if (!expanded.has(focusedRow.address)) {
+        // Collapsed parent → expand; focus stays on same node.
+        expanded.add(focusedRow.address);
+        renderTree({ preserveFocus: true });
+      } else {
+        // Expanded parent → move focus to first child.
+        const firstChildIdx = findVisibleIndexByAddress(focusedRow.address) + 1;
+        if (firstChildIdx < visibleRows.length) focusRow(firstChildIdx);
+      }
+      break;
+    }
+    case "ArrowLeft": {
+      event.preventDefault();
+      if (!focusedRow) break;
+      if (rowHasChildren(focusedRow) && expanded.has(focusedRow.address)) {
+        // Expanded parent → collapse; focus stays on same node.
+        expanded.delete(focusedRow.address);
+        renderTree({ preserveFocus: true });
+      } else if (focusedRow.parentAddress !== null) {
+        // Leaf or collapsed: move to parent.
+        const parentIdx = findVisibleIndexByAddress(focusedRow.parentAddress);
+        if (parentIdx >= 0) focusRow(parentIdx);
+      }
+      break;
+    }
     case "Enter":
     case "Escape":
       event.preventDefault();
@@ -135,12 +385,12 @@ function handleDialogKeydown(event: KeyboardEvent): void {
 function handleDialogFocusIn(event: FocusEvent): void {
   const target = event.target;
   if (!(target instanceof Element)) return;
-  const row = target.closest(`tr[${ROW_INDEX_ATTR}]`);
+  const row = target.closest(`tr[${ROW_ADDRESS_ATTR}]`);
   if (!(row instanceof HTMLTableRowElement)) return;
-  const raw = row.getAttribute(ROW_INDEX_ATTR);
-  const idx = raw === null ? NaN : Number(raw);
-  if (!Number.isInteger(idx) || idx < 0 || idx >= currentRows.length) return;
-  if (currentFocusIndex !== idx) focusRow(idx);
+  const addr = row.getAttribute(ROW_ADDRESS_ATTR);
+  if (addr === null) return;
+  const idx = findVisibleIndexByAddress(addr);
+  if (idx >= 0 && currentFocusIndex !== idx) focusRow(idx);
 }
 
 function wireDialogKeyboard(): void {
@@ -150,79 +400,8 @@ function wireDialogKeyboard(): void {
   body.addEventListener("focusin", handleDialogFocusIn);
 }
 
-function renderDialogTraceRows(
-  rows: TraceRow[],
-  options: { preserveFocus?: boolean } = {}
-): void {
-  const body = document.getElementById(BODY_ID);
-  if (!(body instanceof HTMLTableSectionElement)) return;
+// ---- Message handling ----
 
-  // Remember the focused row's address (not just its index) so a
-  // progressive update that happens to shorten or reorder rows still
-  // lands focus on the right row. In practice BFS only appends, but
-  // this is the robust path.
-  const focusedAddress =
-    options.preserveFocus && currentFocusIndex !== null && currentFocusIndex < currentRows.length
-      ? currentRows[currentFocusIndex].address
-      : null;
-
-  body.textContent = "";
-  currentRows = rows;
-  currentFocusIndex = null;
-
-  if (rows.length === 0) {
-    const tr = document.createElement("tr");
-    const td = document.createElement("td");
-    td.colSpan = 4;
-    td.textContent = "No trace results.";
-    tr.appendChild(td);
-    body.appendChild(tr);
-    return;
-  }
-
-  rows.forEach((item, index) => {
-    const tr = document.createElement("tr");
-    tr.className = "trace-row-clickable";
-    tr.setAttribute("role", "option");
-    tr.setAttribute("tabindex", "0");
-    tr.setAttribute(ROW_INDEX_ATTR, String(index));
-    tr.setAttribute("aria-selected", "false");
-
-    const level = document.createElement("td");
-    const address = document.createElement("td");
-    const value = document.createElement("td");
-    const formula = document.createElement("td");
-
-    level.textContent = String(item.level);
-    address.textContent = item.address;
-    value.textContent = item.value;
-    formula.textContent = item.formula;
-
-    tr.append(level, address, value, formula);
-    body.appendChild(tr);
-  });
-
-  logTracePerf(`t7b rows.rendered count=${rows.length}`);
-
-  // Restore focus: prefer the previously-focused address (preserve
-  // user position during progressive updates), fall back to row 0.
-  let focusTarget = 0;
-  if (focusedAddress !== null) {
-    const found = rows.findIndex((r) => r.address === focusedAddress);
-    if (found >= 0) focusTarget = found;
-  }
-  focusRow(focusTarget, { announce: false });
-  if (focusTarget === 0 && focusedAddress === null) {
-    logTracePerf("t8 row0.focused");
-  }
-}
-
-/**
- * Payload shapes sent by the parent via dialog.messageChild. Kept
- * permissive; unknown actions are ignored. `setRows` may be called
- * multiple times per trace — once per BFS level during progressive
- * loading — so `isFinal` marks the last emission.
- */
 type ParentToDialog =
   | {
       action: "setRows";
@@ -249,23 +428,58 @@ function parseParentMessage(raw: unknown): ParentToDialog | null {
     const msg = parsed as Record<string, unknown>;
     if (!Array.isArray(msg.rows)) return null;
     const direction = msg.direction === "dependents" ? "dependents" : "precedents";
-    // Defensive defaults keep backward compatibility with any older
-    // parent that omits the progressive-loading fields.
     return {
       action: "setRows",
       rows: msg.rows as TraceRow[],
       direction,
       startAddress: typeof msg.startAddress === "string" ? msg.startAddress : "",
       truncated: msg.truncated === true,
-      isFinal: msg.isFinal !== false, // missing → treat as final (old parent)
+      isFinal: msg.isFinal !== false,
       level: typeof msg.level === "number" ? msg.level : 0,
     };
   }
   if (obj.action === "error") {
     const msg = parsed as { message?: unknown };
-    return { action: "error", message: typeof msg.message === "string" ? msg.message : "Unknown error" };
+    return {
+      action: "error",
+      message: typeof msg.message === "string" ? msg.message : "Unknown error",
+    };
   }
   return null;
+}
+
+/**
+ * Apply a setRows message: update allRows, rebuild the child index,
+ * merge expansion state, and re-render. On the first emission all
+ * nodes that have children are expanded. On progressive updates the
+ * user's existing collapses stick; newly arriving nodes default to
+ * expanded so the user sees the full subtree as it streams in.
+ */
+function applySetRows(newRows: TraceRow[]): void {
+  const isFirstEmit = allRows.length === 0;
+  const prevAddresses = new Set(allRows.map((r) => r.address));
+
+  allRows = newRows;
+  rebuildChildIndex();
+
+  if (isFirstEmit) {
+    // Default: every node that has children starts expanded.
+    expanded = new Set();
+    for (const row of allRows) {
+      if (rowHasChildren(row)) expanded.add(row.address);
+    }
+  } else {
+    // Progressive: only auto-expand nodes that are newly present AND
+    // have children. Previously-expanded nodes remain expanded; user's
+    // collapsed nodes remain collapsed.
+    for (const row of allRows) {
+      if (!prevAddresses.has(row.address) && rowHasChildren(row)) {
+        expanded.add(row.address);
+      }
+    }
+  }
+
+  renderTree({ preserveFocus: !isFirstEmit });
 }
 
 function handleParentMessage(arg: { message?: string } | { error: number }): void {
@@ -278,12 +492,8 @@ function handleParentMessage(arg: { message?: string } | { error: number }): voi
       `t7 setRows.received count=${parsed.rows.length} level=${parsed.level} final=${parsed.isFinal}`
     );
     setDialogTitle(`Trace ${parsed.direction}`);
-    // Preserve existing focus across progressive updates. BFS appends
-    // at the end so earlier rows keep their indices — the current
-    // focused row doesn't visually jump. Only the very first emission
-    // sets initial focus to row 0.
-    const isFirstEmit = currentRows.length === 0;
-    renderDialogTraceRows(parsed.rows, { preserveFocus: !isFirstEmit });
+    applySetRows(parsed.rows);
+
     const count = parsed.rows.length;
     const noun = count === 1 ? "cell" : "cells";
     const addrPart = parsed.startAddress ? ` on ${parsed.startAddress}` : "";
@@ -313,9 +523,6 @@ Office.onReady((info) => {
   setDialogTitle(`Trace ${readDirectionFromUrl()}`);
   wireDialogKeyboard();
 
-  // Register parent→dialog listener FIRST, then signal ready. The parent
-  // computes the trace (Excel.run is not available inside this dialog) and
-  // pushes rows via dialog.messageChild once it sees our ready signal.
   Office.context.ui.addHandlerAsync(
     Office.EventType.DialogParentMessageReceived,
     handleParentMessage,
