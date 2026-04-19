@@ -84,7 +84,13 @@ module.exports = async (env, options) => {
       new HtmlWebpackPlugin({
         filename: "traceDialog.html",
         template: "./src/taskpane/traceDialog.html",
-        chunks: ["polyfill", "traceDialog"],
+        // Dialog omits the `polyfill` chunk deliberately: it only targets
+        // modern Excel hosts (Edge WebView2 / Chromium Online), the entry
+        // code uses no features that core-js shims on this host, and
+        // dropping it shaves parse time off the 1–2 s cold dialog spawn
+        // measured in sideload. The main taskpane still ships polyfills
+        // because it runs in the same iframe as legacy-compat code.
+        chunks: ["traceDialog"],
       }),
     ],
     devServer: {
