@@ -28,14 +28,25 @@ import {
 
 let activeDialog: Office.Dialog | null = null;
 /**
- * Stashed until the dialog signals "ready". The compute runs
- * asynchronously — we open the dialog first (so Office drops its
- * "[Add-in] is working on …" ribbon notification as soon as the
- * command handler calls event.completed()), then on the dialog's
- * ready signal we run the BFS and push rows via messageChild.
+ * The compute Promise, kicked off at t0 in parallel with
+ * `displayDialogAsync`. The Office Dialog API charges a 1–2 s tax on
+ * dialog spawn (observed in sideload timing); running the BFS in that
+ * window overlaps the two costs instead of stacking them. When the
+ * dialog finally signals `ready`, we await this Promise (often already
+ * resolved for small traces) and push the rows. A slot of `null`
+ * means no compute is pending — either none has been requested or
+ * the result has already been consumed.
  */
-type PendingCompute = { direction: TraceDirection; maxDepth: number };
-let pendingCompute: PendingCompute | null = null;
+type ComputeSuccess = {
+  ok: true;
+  rows: TraceRow[];
+  direction: TraceDirection;
+  startAddress: string;
+  truncated: boolean;
+};
+type ComputeError = { ok: false; direction: TraceDirection; error: string };
+type ComputeResult = ComputeSuccess | ComputeError;
+let pendingComputePromise: Promise<ComputeResult> | null = null;
 
 // ---- Perf instrumentation (remove when diagnosis is done). ----
 // Logs boundary timestamps so we can identify which segment of the
@@ -89,7 +100,7 @@ function closeActiveDialog(): void {
       // DialogEventReceived handler anyway.
     }
     activeDialog = null;
-    pendingCompute = null;
+    pendingComputePromise = null;
     void pullFocusToGrid();
   }
 }
@@ -197,32 +208,62 @@ function parseDialogMessage(raw: unknown): DialogToParent | null {
   return null;
 }
 
-async function computeAndPushRows(request: PendingCompute): Promise<void> {
+/**
+ * The BFS half of the parallel flow. Runs unconditionally once the
+ * user clicks (even if the dialog handle never arrives — fire-and-
+ * forget; the small wasted work is cheaper than serializing against
+ * the dialog spawn). All errors are reified into a `{ ok: false }`
+ * result rather than thrown, so the consumer has a single shape to
+ * await.
+ */
+async function runCompute(direction: TraceDirection, maxDepth: number): Promise<ComputeResult> {
   try {
     logTracePerf("t4 compute.start");
     const startAddress = await getActiveCellAddress();
     logTracePerf("t4a compute.gotActiveCell");
-    const computed = await computeTrace(request.direction, startAddress, request.maxDepth);
+    const computed = await computeTrace(direction, startAddress, maxDepth);
     logTracePerf(`t5 compute.end rows=${computed.rows.length} truncated=${computed.truncated}`);
-    if (!activeDialog) return;
+    return {
+      ok: true,
+      direction,
+      rows: computed.rows,
+      startAddress: computed.startAddress,
+      truncated: computed.truncated,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logTracePerf(`t5x compute.error ${message}`);
+    return { ok: false, direction, error: message };
+  }
+}
+
+/**
+ * The push half of the parallel flow. Invoked when the dialog signals
+ * `ready`; awaits the compute (already in flight) and ships the rows
+ * via `messageChild`. For fast traces (e.g. 6 rows) the promise is
+ * usually already resolved by the time ready arrives, so this is a
+ * straight-line send.
+ */
+async function pushResultWhenReady(promise: Promise<ComputeResult>): Promise<void> {
+  const result = await promise;
+  if (!activeDialog) return;
+  if (result.ok) {
     activeDialog.messageChild(
       JSON.stringify({
         action: "setRows",
-        rows: computed.rows,
-        direction: request.direction,
-        startAddress: computed.startAddress,
-        truncated: computed.truncated,
+        rows: result.rows,
+        direction: result.direction,
+        startAddress: result.startAddress,
+        truncated: result.truncated,
       })
     );
     logTracePerf("t6 messageChild.sent");
-  } catch (error) {
-    if (!activeDialog) return;
-    const message = error instanceof Error ? error.message : String(error);
-    try {
-      activeDialog.messageChild(JSON.stringify({ action: "error", message }));
-    } catch {
-      // Dialog already gone; nothing to report.
-    }
+    return;
+  }
+  try {
+    activeDialog.messageChild(JSON.stringify({ action: "error", message: result.error }));
+  } catch {
+    // Dialog already gone; nothing to report.
   }
 }
 
@@ -233,13 +274,13 @@ function handleDialogMessage(arg: { message?: string; origin?: string | undefine
 
   if (parsed.action === "ready") {
     logTracePerf("t3 parent.readyReceived");
-    // Dialog has registered its parent-message handler; now run the BFS
-    // and push rows when done. Fire-and-forget: the command handler has
-    // already called event.completed() (it awaited only the dialog open).
-    if (activeDialog && pendingCompute) {
-      const request = pendingCompute;
-      pendingCompute = null;
-      void computeAndPushRows(request);
+    // Dialog has registered its parent-message handler. The BFS was
+    // kicked off at t0 (parallel with dialog spawn); await it here and
+    // push rows as soon as both the compute AND the dialog are ready.
+    if (activeDialog && pendingComputePromise) {
+      const promise = pendingComputePromise;
+      pendingComputePromise = null;
+      void pushResultWhenReady(promise);
     }
     return;
   }
@@ -265,15 +306,15 @@ export type OpenTraceDialogOptions = {
 
 /**
  * Open the trace dialog for the given direction. Returns as soon as the
- * dialog has been spawned — the trace itself is computed asynchronously
- * after the dialog signals `ready`, so the caller (command runtime) can
- * call `event.completed()` immediately and Office will drop its
- * "[Add-in] is working on …" ribbon notification. The dialog shows its
- * static "Loading…" row while the BFS runs in the parent context.
+ * dialog handle has been issued — the trace BFS is kicked off in
+ * parallel with `displayDialogAsync` (not serialized after the dialog
+ * signals `ready`), which overlaps the 1–2 s Office Dialog spawn tax
+ * with the BFS's Excel-side compute. For medium traces this ~halves
+ * the perceived click-to-rows latency; small traces pay no penalty.
  *
- * The dialog cannot call `Excel.run` itself (documented restriction
- * on the Office Dialog API); all host-document work stays on this
- * side of the boundary.
+ * The dialog cannot call `Excel.run` itself (documented restriction on
+ * the Office Dialog API); all host-document work stays on this side of
+ * the boundary.
  */
 export async function openTraceDialog(
   direction: TraceDirection,
@@ -283,7 +324,14 @@ export async function openTraceDialog(
   logTracePerf(`t0 click direction=${direction}`);
   closeActiveDialog();
 
-  pendingCompute = { direction, maxDepth: sanitizeTraceDepth(options.maxDepth) };
+  const maxDepth = sanitizeTraceDepth(options.maxDepth);
+
+  // Fire compute IMMEDIATELY so it runs concurrently with the dialog
+  // spawn. The promise is stashed; `handleDialogMessage` awaits it on
+  // the "ready" signal. Even if the dialog never opens (rare error
+  // path), the compute's wasted cycles are cheap compared to
+  // serializing them behind a 1–2 s dialog spawn.
+  pendingComputePromise = runCompute(direction, maxDepth);
 
   const url = new URL("traceDialog.html", window.location.href);
   url.searchParams.set("direction", direction);
@@ -298,7 +346,7 @@ export async function openTraceDialog(
       { height, width, displayInIframe: true },
       (result) => {
         if (result.status !== Office.AsyncResultStatus.Succeeded) {
-          pendingCompute = null;
+          pendingComputePromise = null;
           resolve();
           return;
         }
@@ -307,7 +355,7 @@ export async function openTraceDialog(
         activeDialog.addEventHandler(Office.EventType.DialogMessageReceived, handleDialogMessage);
         activeDialog.addEventHandler(Office.EventType.DialogEventReceived, () => {
           activeDialog = null;
-          pendingCompute = null;
+          pendingComputePromise = null;
         });
         resolve();
       }
