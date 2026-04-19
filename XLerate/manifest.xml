@@ -30,30 +30,14 @@
           </GetStarted>
           <FunctionFile resid="Commands.Url"/>
           <ExtensionPoint xsi:type="PrimaryCommandSurface">
-            <OfficeTab id="TabHome">
-              <Group id="CommandsGroup">
-                <Label resid="CommandsGroup.Label"/>
+            <CustomTab id="XLerateTab">
+              <Group id="FormulasGroup">
+                <Label resid="FormulasGroup.Label"/>
                 <Icon>
                   <bt:Image size="16" resid="Icon.16x16"/>
                   <bt:Image size="32" resid="Icon.32x32"/>
                   <bt:Image size="80" resid="Icon.80x80"/>
                 </Icon>
-                <Control xsi:type="Button" id="TaskpaneButton">
-                  <Label resid="TaskpaneButton.Label"/>
-                  <Supertip>
-                    <Title resid="TaskpaneButton.Label"/>
-                    <Description resid="TaskpaneButton.Tooltip"/>
-                  </Supertip>
-                  <Icon>
-                    <bt:Image size="16" resid="Icon.16x16"/>
-                    <bt:Image size="32" resid="Icon.32x32"/>
-                    <bt:Image size="80" resid="Icon.80x80"/>
-                  </Icon>
-                  <Action xsi:type="ShowTaskpane">
-                    <TaskpaneId>ButtonId1</TaskpaneId>
-                    <SourceLocation resid="Taskpane.Url"/>
-                  </Action>
-                </Control>
                 <Control xsi:type="Button" id="TracePrecedentsDialogButton">
                   <Label resid="TracePrecBtn.Label"/>
                   <Supertip>
@@ -84,8 +68,169 @@
                     <FunctionName>openTraceDependentsDialog</FunctionName>
                   </Action>
                 </Control>
+                <Control xsi:type="Button" id="SwitchSignBtn">
+                  <Label resid="SwitchSignBtn.Label"/>
+                  <Supertip>
+                    <Title resid="SwitchSignBtn.Label"/>
+                    <Description resid="SwitchSignBtn.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>runSwitchSign</FunctionName>
+                  </Action>
+                </Control>
+                <Control xsi:type="Button" id="SmartFillBtn">
+                  <Label resid="SmartFillBtn.Label"/>
+                  <Supertip>
+                    <Title resid="SmartFillBtn.Label"/>
+                    <Description resid="SmartFillBtn.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>runSmartFillRight</FunctionName>
+                  </Action>
+                </Control>
               </Group>
-            </OfficeTab>
+              <Group id="AuditingGroup">
+                <Label resid="AuditingGroup.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16x16"/>
+                  <bt:Image size="32" resid="Icon.32x32"/>
+                  <bt:Image size="80" resid="Icon.80x80"/>
+                </Icon>
+                <Control xsi:type="Button" id="ConsistencyBtn">
+                  <Label resid="ConsistencyBtn.Label"/>
+                  <Supertip>
+                    <Title resid="ConsistencyBtn.Label"/>
+                    <Description resid="ConsistencyBtn.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>runFormulaConsistency</FunctionName>
+                  </Action>
+                </Control>
+              </Group>
+              <Group id="FormattingGroup">
+                <Label resid="FormattingGroup.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16x16"/>
+                  <bt:Image size="32" resid="Icon.32x32"/>
+                  <bt:Image size="80" resid="Icon.80x80"/>
+                </Icon>
+                <Control xsi:type="Button" id="CycleNumBtn">
+                  <Label resid="CycleNumBtn.Label"/>
+                  <Supertip>
+                    <Title resid="CycleNumBtn.Label"/>
+                    <Description resid="CycleNumBtn.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>runCycleNumberFormat</FunctionName>
+                  </Action>
+                </Control>
+                <Control xsi:type="Button" id="CycleDateBtn">
+                  <Label resid="CycleDateBtn.Label"/>
+                  <Supertip>
+                    <Title resid="CycleDateBtn.Label"/>
+                    <Description resid="CycleDateBtn.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>runCycleDateFormat</FunctionName>
+                  </Action>
+                </Control>
+                <Control xsi:type="Button" id="CycleCellBtn">
+                  <Label resid="CycleCellBtn.Label"/>
+                  <Supertip>
+                    <Title resid="CycleCellBtn.Label"/>
+                    <Description resid="CycleCellBtn.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>runCycleCellFormat</FunctionName>
+                  </Action>
+                </Control>
+                <Control xsi:type="Button" id="CycleTextBtn">
+                  <Label resid="CycleTextBtn.Label"/>
+                  <Supertip>
+                    <Title resid="CycleTextBtn.Label"/>
+                    <Description resid="CycleTextBtn.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>runCycleTextStyle</FunctionName>
+                  </Action>
+                </Control>
+                <Control xsi:type="Button" id="AutoColorBtn">
+                  <Label resid="AutoColorBtn.Label"/>
+                  <Supertip>
+                    <Title resid="AutoColorBtn.Label"/>
+                    <Description resid="AutoColorBtn.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>runAutoColor</FunctionName>
+                  </Action>
+                </Control>
+              </Group>
+              <Group id="SettingsGroup">
+                <Label resid="SettingsGroup.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16x16"/>
+                  <bt:Image size="32" resid="Icon.32x32"/>
+                  <bt:Image size="80" resid="Icon.80x80"/>
+                </Icon>
+                <Control xsi:type="Button" id="TaskpaneButton">
+                  <Label resid="TaskpaneButton.Label"/>
+                  <Supertip>
+                    <Title resid="TaskpaneButton.Label"/>
+                    <Description resid="TaskpaneButton.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>ButtonId1</TaskpaneId>
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+              </Group>
+              <Label resid="XLerateTab.Label"/>
+            </CustomTab>
           </ExtensionPoint>
         </DesktopFormFactor>
       </Host>
@@ -103,16 +248,36 @@
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GetStarted.Title" DefaultValue="Get started with your sample add-in!"/>
-        <bt:String id="CommandsGroup.Label" DefaultValue="XLerate"/>
+        <bt:String id="XLerateTab.Label" DefaultValue="XLerate"/>
+        <bt:String id="FormulasGroup.Label" DefaultValue="Formulas"/>
+        <bt:String id="AuditingGroup.Label" DefaultValue="Auditing"/>
+        <bt:String id="FormattingGroup.Label" DefaultValue="Formatting"/>
+        <bt:String id="SettingsGroup.Label" DefaultValue="Settings"/>
         <bt:String id="TaskpaneButton.Label" DefaultValue="Show Task Pane"/>
         <bt:String id="TracePrecBtn.Label" DefaultValue="Trace Precedents"/>
         <bt:String id="TraceDepBtn.Label" DefaultValue="Trace Dependents"/>
+        <bt:String id="SwitchSignBtn.Label" DefaultValue="Switch Sign"/>
+        <bt:String id="SmartFillBtn.Label" DefaultValue="Smart Fill Right"/>
+        <bt:String id="ConsistencyBtn.Label" DefaultValue="Horizontal Check"/>
+        <bt:String id="CycleNumBtn.Label" DefaultValue="Cycle Number"/>
+        <bt:String id="CycleDateBtn.Label" DefaultValue="Cycle Date"/>
+        <bt:String id="CycleCellBtn.Label" DefaultValue="Cycle Cell"/>
+        <bt:String id="CycleTextBtn.Label" DefaultValue="Cycle Text Style"/>
+        <bt:String id="AutoColorBtn.Label" DefaultValue="Auto-color"/>
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="GetStarted.Description" DefaultValue="Your sample add-in loaded successfully. Go to the HOME tab and click the 'Show Task Pane' button to get started."/>
-        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Click to Show a Taskpane"/>
+        <bt:String id="GetStarted.Description" DefaultValue="Your sample add-in loaded successfully. Open the XLerate tab on the ribbon to see available actions, or click Show Task Pane for settings and trace results."/>
+        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Open the XLerate task pane for settings, trace results, and additional actions."/>
         <bt:String id="TracePrecBtn.Tooltip" DefaultValue="Open a keyboard-navigable dialog listing the precedents of the active cell. Arrow keys move Excel's selection live; Esc or Enter closes."/>
         <bt:String id="TraceDepBtn.Tooltip" DefaultValue="Open a keyboard-navigable dialog listing the dependents of the active cell. Arrow keys move Excel's selection live; Esc or Enter closes."/>
+        <bt:String id="SwitchSignBtn.Tooltip" DefaultValue="Negate numbers or formulas in the selection. Text cells are unchanged. Ctrl+Z undoes the whole batch."/>
+        <bt:String id="SmartFillBtn.Tooltip" DefaultValue="Fill the active cell's formula to the right, bounded by the values in the three rows above the active row."/>
+        <bt:String id="ConsistencyBtn.Tooltip" DefaultValue="Mark formulas in the selection as consistent (green) or inconsistent (red) with their horizontal neighbors. Ctrl+Z removes the marks."/>
+        <bt:String id="CycleNumBtn.Tooltip" DefaultValue="Cycle the selection through the configured number-format presets."/>
+        <bt:String id="CycleDateBtn.Tooltip" DefaultValue="Cycle the selection through the configured date-format presets."/>
+        <bt:String id="CycleCellBtn.Tooltip" DefaultValue="Cycle the selection through cell-format presets (Normal, Inputs, Good, Bad, Important)."/>
+        <bt:String id="CycleTextBtn.Tooltip" DefaultValue="Cycle the selection through text-style presets (Heading, Subheading, Sum, Normal)."/>
+        <bt:String id="AutoColorBtn.Tooltip" DefaultValue="Color-code values in the selection by content type: blue for numeric inputs, green for cross-sheet references, orange for hyperlinks, black for local formulas."/>
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>
