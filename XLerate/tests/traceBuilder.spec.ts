@@ -175,6 +175,151 @@ describe("buildTrace", () => {
     expect(result.rows.map((r) => r.address)).toEqual(["Sheet1!A1", "Sheet1!B1"]);
   });
 
+  describe("onProgress (progressive loading)", () => {
+    it("fires once with isFinal=true when maxDepth=0", async () => {
+      const root = cell("Sheet1!A1", 0, 0, 42);
+      const emissions: Array<{ level: number; isFinal: boolean; addresses: string[] }> = [];
+
+      await buildTrace({
+        root,
+        maxDepth: 0,
+        getAllNeighbors: async () => [],
+        onProgress: async (p) => {
+          emissions.push({ level: p.level, isFinal: p.isFinal, addresses: p.rows.map((r) => r.address) });
+        },
+      });
+
+      expect(emissions).toEqual([{ level: 0, isFinal: true, addresses: ["Sheet1!A1"] }]);
+    });
+
+    it("emits once per BFS level with cumulative rows; marks the final emission", async () => {
+      const a = cell("Sheet1!A1", 0, 0);
+      const b = cell("Sheet1!B1", 0, 1);
+      const c = cell("Sheet1!C1", 0, 2);
+      const d = cell("Sheet1!D1", 0, 3);
+      const neighborMap = new Map<string, TraceCellInfo[]>([
+        ["Sheet1!A1", [b]],
+        ["Sheet1!B1", [c]],
+        ["Sheet1!C1", [d]],
+        ["Sheet1!D1", []],
+      ]);
+      const emissions: Array<{ level: number; isFinal: boolean; addresses: string[] }> = [];
+
+      await buildTrace({
+        root: a,
+        maxDepth: 3,
+        getAllNeighbors: batched(neighborMap),
+        onProgress: async (p) => {
+          emissions.push({ level: p.level, isFinal: p.isFinal, addresses: p.rows.map((r) => r.address) });
+        },
+      });
+
+      expect(emissions).toEqual([
+        { level: 0, isFinal: false, addresses: ["Sheet1!A1"] },
+        { level: 1, isFinal: false, addresses: ["Sheet1!A1", "Sheet1!B1"] },
+        { level: 2, isFinal: false, addresses: ["Sheet1!A1", "Sheet1!B1", "Sheet1!C1"] },
+        { level: 3, isFinal: true, addresses: ["Sheet1!A1", "Sheet1!B1", "Sheet1!C1", "Sheet1!D1"] },
+      ]);
+    });
+
+    it("sets isFinal=true on the emission when BFS exits early because a level produced no new cells", async () => {
+      // Root has no precedents. Loop body runs once (level 0), adds nothing,
+      // sees nextLevelCells is empty — that emission is the last.
+      const a = cell("Sheet1!A1", 0, 0);
+      const emissions: Array<{ level: number; isFinal: boolean }> = [];
+
+      await buildTrace({
+        root: a,
+        maxDepth: 5,
+        getAllNeighbors: async () => [[]],
+        onProgress: async (p) => {
+          emissions.push({ level: p.level, isFinal: p.isFinal });
+        },
+      });
+
+      // First emit: root with isFinal=false (because maxDepth>0).
+      // Second emit: after loop iter 1, nextLevelCells empty → isFinal=true.
+      expect(emissions).toEqual([
+        { level: 0, isFinal: false },
+        { level: 1, isFinal: true },
+      ]);
+    });
+
+    it("sets isFinal=true on truncation emission", async () => {
+      const root = cell("Sheet1!A1", 0, 0);
+      const siblings = Array.from({ length: 10 }, (_, i) => cell(`Sheet1!B${i + 1}`, i, 1));
+      const emissions: Array<{ level: number; isFinal: boolean; truncated: boolean }> = [];
+
+      await buildTrace({
+        root,
+        maxDepth: 5,
+        maxRows: 3,
+        getAllNeighbors: async (cells) =>
+          cells.map((c) => (c.address === "Sheet1!A1" ? siblings : [])),
+        onProgress: async (p) => {
+          emissions.push({ level: p.level, isFinal: p.isFinal, truncated: p.truncated });
+        },
+      });
+
+      // Level 0 root, then level 1 hits maxRows=3 mid-expansion.
+      expect(emissions).toEqual([
+        { level: 0, isFinal: false, truncated: false },
+        { level: 1, isFinal: true, truncated: true },
+      ]);
+    });
+
+    it("awaits each onProgress call before starting the next level (back-pressure)", async () => {
+      const a = cell("Sheet1!A1", 0, 0);
+      const b = cell("Sheet1!B1", 0, 1);
+      const c = cell("Sheet1!C1", 0, 2);
+      const neighborMap = new Map<string, TraceCellInfo[]>([
+        ["Sheet1!A1", [b]],
+        ["Sheet1!B1", [c]],
+        ["Sheet1!C1", []],
+      ]);
+
+      const order: string[] = [];
+      await buildTrace({
+        root: a,
+        maxDepth: 3,
+        getAllNeighbors: async (cells) => {
+          order.push(`fetch:${cells.map((x) => x.address).join(",")}`);
+          return batched(neighborMap)(cells);
+        },
+        onProgress: async (p) => {
+          // Yield one microtask to simulate async work (e.g. messageChild).
+          await Promise.resolve();
+          order.push(`emit:level=${p.level}`);
+        },
+      });
+
+      // Expect: emit(root) → fetch(root) → emit(level1) → fetch(level1) → emit(level2) → fetch(level2) → emit(level3)
+      expect(order).toEqual([
+        "emit:level=0",
+        "fetch:Sheet1!A1",
+        "emit:level=1",
+        "fetch:Sheet1!B1",
+        "emit:level=2",
+        "fetch:Sheet1!C1",
+        "emit:level=3",
+      ]);
+    });
+
+    it("passing no onProgress is non-breaking (backward-compat)", async () => {
+      const a = cell("Sheet1!A1", 0, 0);
+      const b = cell("Sheet1!B1", 0, 1);
+
+      const result = await buildTrace({
+        root: a,
+        maxDepth: 1,
+        getAllNeighbors: batched(new Map([["Sheet1!A1", [b]]])),
+      });
+
+      expect(result.rows.map((r) => r.address)).toEqual(["Sheet1!A1", "Sheet1!B1"]);
+      expect(result.truncated).toBe(false);
+    });
+  });
+
   it("batches: all cells at one level are passed together to getAllNeighbors, then all at the next", async () => {
     // Root -> [B, C, D] at level 1; B -> [E]; C -> [F, G]; D -> [H] at level 2.
     // Expect exactly TWO calls to getAllNeighbors: once with [root], once with [B, C, D].

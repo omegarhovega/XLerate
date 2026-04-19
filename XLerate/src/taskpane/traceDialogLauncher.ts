@@ -131,15 +131,33 @@ async function selectAddressInGrid(address: string): Promise<void> {
   }
 }
 
+export type TraceProgress = {
+  rows: TraceRow[];
+  startAddress: string;
+  level: number;
+  isFinal: boolean;
+  truncated: boolean;
+};
+
 /**
  * Compute precedents or dependents starting at `startAddress` (or the
  * active cell if null). Runs Excel.run in the parent runtime; all
  * Office.js work stays out of the dialog per the API restriction.
+ *
+ * When `onProgress` is provided, the callback fires once per BFS
+ * level — the first emission is the root alone (before any neighbor
+ * lookup runs), each subsequent emission adds the next level's
+ * newly discovered cells, and the final emission has `isFinal=true`.
+ * The builder awaits each callback so consumers can `messageChild`
+ * over IPC and the browser can paint before the next level's sync
+ * starts. Without `onProgress`, behavior is identical to the prior
+ * all-at-once return.
  */
 async function computeTrace(
   direction: TraceDirection,
   startAddress: string | null,
-  maxDepth: number
+  maxDepth: number,
+  onProgress?: (progress: TraceProgress) => void | Promise<void>
 ): Promise<{ rows: TraceRow[]; startAddress: string; truncated: boolean }> {
   const requires = Office.context.requirements.isSetSupported("ExcelApi", "1.12");
   if (!requires) {
@@ -169,7 +187,22 @@ async function computeTrace(
       return neighborLists.map((list) => list.map(snapshotRangeForTrace));
     };
 
-    const result = await buildTrace({ root, maxDepth, getAllNeighbors });
+    const result = await buildTrace({
+      root,
+      maxDepth,
+      getAllNeighbors,
+      onProgress: onProgress
+        ? async (p) => {
+            await onProgress({
+              rows: p.rows,
+              startAddress: resolvedAddress,
+              level: p.level,
+              isFinal: p.isFinal,
+              truncated: p.truncated,
+            });
+          }
+        : undefined,
+    });
     rows = result.rows;
     truncated = result.truncated;
   });
@@ -205,19 +238,38 @@ async function computeAndPushRows(request: PendingCompute): Promise<void> {
     logTracePerf("t4 compute.start");
     const startAddress = await getActiveCellAddress();
     logTracePerf("t4a compute.gotActiveCell");
-    const computed = await computeTrace(request.direction, startAddress, request.maxDepth);
-    logTracePerf(`t5 compute.end rows=${computed.rows.length} truncated=${computed.truncated}`);
-    if (!activeDialog) return;
-    activeDialog.messageChild(
-      JSON.stringify({
-        action: "setRows",
-        rows: computed.rows,
-        direction: request.direction,
-        startAddress: computed.startAddress,
-        truncated: computed.truncated,
-      })
-    );
-    logTracePerf("t6 messageChild.sent");
+
+    // Stream each BFS level to the dialog as it completes. Level 0
+    // (just the root) lands before any neighbor lookup, so the user
+    // sees a filled dialog almost instantly. Subsequent levels paint
+    // in as Excel's precedent-graph compute reaches them.
+    let firstEmitLogged = false;
+    await computeTrace(request.direction, startAddress, request.maxDepth, async (progress) => {
+      if (!firstEmitLogged) {
+        logTracePerf(`t5a compute.firstEmit level=${progress.level} rows=${progress.rows.length}`);
+        firstEmitLogged = true;
+      }
+      if (progress.isFinal) {
+        logTracePerf(`t5 compute.end rows=${progress.rows.length} truncated=${progress.truncated}`);
+      }
+      if (!activeDialog) return;
+      try {
+        activeDialog.messageChild(
+          JSON.stringify({
+            action: "setRows",
+            rows: progress.rows,
+            direction: request.direction,
+            startAddress: progress.startAddress,
+            truncated: progress.truncated,
+            isFinal: progress.isFinal,
+            level: progress.level,
+          })
+        );
+        if (progress.isFinal) logTracePerf("t6 messageChild.sent (final)");
+      } catch {
+        // Dialog already gone; skip rest of streaming.
+      }
+    });
   } catch (error) {
     if (!activeDialog) return;
     const message = error instanceof Error ? error.message : String(error);

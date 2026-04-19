@@ -150,9 +150,21 @@ function wireDialogKeyboard(): void {
   body.addEventListener("focusin", handleDialogFocusIn);
 }
 
-function renderDialogTraceRows(rows: TraceRow[]): void {
+function renderDialogTraceRows(
+  rows: TraceRow[],
+  options: { preserveFocus?: boolean } = {}
+): void {
   const body = document.getElementById(BODY_ID);
   if (!(body instanceof HTMLTableSectionElement)) return;
+
+  // Remember the focused row's address (not just its index) so a
+  // progressive update that happens to shorten or reorder rows still
+  // lands focus on the right row. In practice BFS only appends, but
+  // this is the robust path.
+  const focusedAddress =
+    options.preserveFocus && currentFocusIndex !== null && currentFocusIndex < currentRows.length
+      ? currentRows[currentFocusIndex].address
+      : null;
 
   body.textContent = "";
   currentRows = rows;
@@ -191,13 +203,25 @@ function renderDialogTraceRows(rows: TraceRow[]): void {
   });
 
   logTracePerf(`t7b rows.rendered count=${rows.length}`);
-  focusRow(0, { announce: false });
-  logTracePerf("t8 row0.focused");
+
+  // Restore focus: prefer the previously-focused address (preserve
+  // user position during progressive updates), fall back to row 0.
+  let focusTarget = 0;
+  if (focusedAddress !== null) {
+    const found = rows.findIndex((r) => r.address === focusedAddress);
+    if (found >= 0) focusTarget = found;
+  }
+  focusRow(focusTarget, { announce: false });
+  if (focusTarget === 0 && focusedAddress === null) {
+    logTracePerf("t8 row0.focused");
+  }
 }
 
 /**
  * Payload shapes sent by the parent via dialog.messageChild. Kept
- * permissive; unknown actions are ignored.
+ * permissive; unknown actions are ignored. `setRows` may be called
+ * multiple times per trace — once per BFS level during progressive
+ * loading — so `isFinal` marks the last emission.
  */
 type ParentToDialog =
   | {
@@ -205,7 +229,9 @@ type ParentToDialog =
       rows: TraceRow[];
       direction: "precedents" | "dependents";
       startAddress: string;
-      truncated?: boolean;
+      truncated: boolean;
+      isFinal: boolean;
+      level: number;
     }
   | { action: "error"; message: string };
 
@@ -223,12 +249,16 @@ function parseParentMessage(raw: unknown): ParentToDialog | null {
     const msg = parsed as Record<string, unknown>;
     if (!Array.isArray(msg.rows)) return null;
     const direction = msg.direction === "dependents" ? "dependents" : "precedents";
+    // Defensive defaults keep backward compatibility with any older
+    // parent that omits the progressive-loading fields.
     return {
       action: "setRows",
       rows: msg.rows as TraceRow[],
       direction,
       startAddress: typeof msg.startAddress === "string" ? msg.startAddress : "",
       truncated: msg.truncated === true,
+      isFinal: msg.isFinal !== false, // missing → treat as final (old parent)
+      level: typeof msg.level === "number" ? msg.level : 0,
     };
   }
   if (obj.action === "error") {
@@ -244,14 +274,27 @@ function handleParentMessage(arg: { message?: string } | { error: number }): voi
   if (!parsed) return;
 
   if (parsed.action === "setRows") {
-    logTracePerf(`t7 setRows.received count=${parsed.rows.length}`);
+    logTracePerf(
+      `t7 setRows.received count=${parsed.rows.length} level=${parsed.level} final=${parsed.isFinal}`
+    );
     setDialogTitle(`Trace ${parsed.direction}`);
-    renderDialogTraceRows(parsed.rows);
+    // Preserve existing focus across progressive updates. BFS appends
+    // at the end so earlier rows keep their indices — the current
+    // focused row doesn't visually jump. Only the very first emission
+    // sets initial focus to row 0.
+    const isFirstEmit = currentRows.length === 0;
+    renderDialogTraceRows(parsed.rows, { preserveFocus: !isFirstEmit });
     const count = parsed.rows.length;
     const noun = count === 1 ? "cell" : "cells";
     const addrPart = parsed.startAddress ? ` on ${parsed.startAddress}` : "";
     const truncPart = parsed.truncated ? " (truncated)" : "";
-    setDialogStatus(`Trace ${parsed.direction}${addrPart}: ${count} ${noun}${truncPart}.`);
+    if (parsed.isFinal) {
+      setDialogStatus(`Trace ${parsed.direction}${addrPart}: ${count} ${noun}${truncPart}.`);
+    } else {
+      setDialogStatus(
+        `Trace ${parsed.direction}${addrPart}: loading… ${count} ${noun} so far (depth ${parsed.level})`
+      );
+    }
     return;
   }
 

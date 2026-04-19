@@ -52,6 +52,28 @@ export type TraceBuilderInput = {
    * just return per-cell lists; correctness is identical.
    */
   getAllNeighbors: (cells: TraceCellInfo[]) => Promise<TraceCellInfo[][]>;
+  /**
+   * Optional progressive-loading callback. Fires once per BFS level,
+   * starting with the root alone (level 0). Consumer receives the
+   * full cumulative `rows` plus `isFinal` — when `isFinal` is true
+   * this is the last callback and no further emissions will occur.
+   * The builder `await`s each callback, so the consumer can drive
+   * IPC (e.g. `dialog.messageChild`) and yield a frame before the
+   * next BFS level starts. Skipping the callback (not passing
+   * `onProgress`) preserves the pre-existing all-at-once behavior.
+   */
+  onProgress?: (progress: TraceBuilderProgress) => void | Promise<void>;
+};
+
+export type TraceBuilderProgress = {
+  /** Cumulative rows discovered so far. Safe to retain; the builder passes a copy. */
+  rows: TraceRow[];
+  /** Deepest BFS level included in `rows`. Root is 0. */
+  level: number;
+  /** True when this is the last `onProgress` call; no further emissions follow. */
+  isFinal: boolean;
+  /** True when the row cap was hit and BFS stopped early. */
+  truncated: boolean;
 };
 
 export type TraceBuilderResult = {
@@ -79,7 +101,7 @@ export function toTraceRow(cell: TraceCellInfo, level: number): TraceRow {
  * columnIndex)`; row cap wins over depth cap when both apply.
  */
 export async function buildTrace(input: TraceBuilderInput): Promise<TraceBuilderResult> {
-  const { root, maxDepth, getAllNeighbors } = input;
+  const { root, maxDepth, getAllNeighbors, onProgress } = input;
   const maxRows = input.maxRows ?? MAX_TRACE_ROWS;
 
   const rows: TraceRow[] = [toTraceRow(root, 0)];
@@ -87,6 +109,18 @@ export async function buildTrace(input: TraceBuilderInput): Promise<TraceBuilder
     buildTraceCellKey(root.worksheetName, root.rowIndex, root.columnIndex),
   ]);
   let truncated = false;
+
+  // Emit the root immediately so a progressive-loading consumer can
+  // render "level 0" before any neighbor lookups run. For maxDepth=0
+  // this is also the final emit.
+  if (onProgress) {
+    await onProgress({
+      rows: [...rows],
+      level: 0,
+      isFinal: maxDepth === 0,
+      truncated: false,
+    });
+  }
 
   // At each iteration, `currentLevelCells` holds all cells at depth
   // `level`, in the order they were first discovered. We ask for all
@@ -118,6 +152,17 @@ export async function buildTrace(input: TraceBuilderInput): Promise<TraceBuilder
     }
 
     currentLevelCells = nextLevelCells;
+
+    if (onProgress) {
+      const willBeFinal =
+        truncated || currentLevelCells.length === 0 || level + 1 >= maxDepth;
+      await onProgress({
+        rows: [...rows],
+        level: level + 1,
+        isFinal: willBeFinal,
+        truncated,
+      });
+    }
   }
 
   return { rows, truncated };
