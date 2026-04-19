@@ -35,6 +35,17 @@ dependency-cruiser, and a strict TypeScript config for new layers. If you
 need to import `office-js` outside `adapters/`, stop and reconsider the
 design — the answer is almost always "extend the port."**
 
+**Pragmatic exception during migration:** `src/taskpane/` files use the
+Office.js globals (`Excel`, `Office`) directly for features that haven't
+been migrated through the port yet (`taskpane.ts`'s own `Excel.run` calls,
+`traceDialogLauncher.ts`, `traceExcelNeighbors.ts`, `traceDialog.ts`),
+and `src/commands/commands.ts` (ribbon ExecuteFunction handlers) does the
+same. The dependency-cruiser rule restricts `office-js` *imports* to
+`adapters/`; globals-via-`/* global Excel, Office */` are not imports
+and remain allowed in `taskpane/` + `commands/`. When a taskpane feature
+eventually gets its harness migration, Office.js usage moves into the
+port and this exception shrinks.
+
 ## The evaluator
 
 `npm run ci:all` (inside `XLerate/`) is the single command that tells you
@@ -189,6 +200,80 @@ stored addresses. See spec §3.5 / §3.6.
 
 Still true: never bulk-wipe with `sheet.getUsedRange(true).format.fill.clear()` —
 that nukes user formatting alongside ours.
+
+### Office Dialog API windows cannot call `Excel.run`
+
+Documented restriction:
+https://learn.microsoft.com/en-us/office/dev/add-ins/develop/dialog-api-in-office-add-ins
+— *"the dialog cannot use Office host-specific APIs like Excel.run or
+Word.run to interact with the host document."*
+
+The error you'll see in the dialog's own console if you forget this:
+`"You cannot perform the requested operation."` thrown out of
+`Excel.run`. Swallowed into whatever try/catch surrounds it — in Phase B
+this surfaced only as a generic "Trace failed" status line until we
+opened DevTools on the dialog window itself.
+
+**The pattern we use instead** (see `src/taskpane/traceDialog.ts` +
+`traceDialogLauncher.ts`):
+
+1. Dialog page is pure UI — it receives data via
+   `Office.context.ui.addHandlerAsync(DialogParentMessageReceived, …)`.
+2. Parent runtime (taskpane or commands) runs the `Excel.run` work and
+   pushes the result via `dialog.messageChild(JSON.stringify(payload))`.
+3. Dialog sends back user actions (navigate, close) via
+   `Office.context.ui.messageParent`. Parent handles the Excel work
+   those actions imply.
+4. Handshake: dialog sends `{ action: "ready" }` after registering its
+   listener; parent pushes rows on that signal (not before, or the
+   message lands before the dialog can hear it).
+
+New dialog features MUST use this pattern. Do not try to "just put an
+`Excel.run` in the dialog" — it compiles, typechecks, and will fail at
+runtime in a hard-to-debug way.
+
+### Excel serializes concurrent add-in API calls during dialog spawn
+
+Discovered in Phase B perf work (reverted in `bb396c2`): running an
+`Excel.run` in parallel with `Office.context.ui.displayDialogAsync`
+from the same add-in runtime does NOT overlap. Excel's add-in message
+queue processes them one-at-a-time. Measured: a `getActiveCell` +
+`context.sync()` that was 2 ms in serial mode became **~1,000 ms**
+when fired alongside a `displayDialogAsync` call.
+
+Implication: don't design perf optimizations around "let the dialog
+spawn while compute runs." There's no parallelism benefit. The
+`computeTrace` in `traceDialogLauncher.ts` runs serially after the
+dialog signals `ready`, and that's the correct shape — earlier
+parallel attempts only added contention overhead.
+
+If you find a future case where this appears to hold (e.g. on a newer
+Office host version), re-measure before committing — Microsoft could
+change this and the cost is model-dependent.
+
+### Progressive streaming for long operations — use `messageChild` per logical chunk
+
+When an operation produces incremental results (e.g. BFS trace expanding
+one level at a time), push each chunk via `dialog.messageChild` as it
+completes rather than accumulating the full result before a single send.
+The dialog repaints between chunks and the user perceives the operation
+as fast even when total wall-clock time is the same.
+
+The builder's `onProgress` callback (see `core/traceBuilder.ts`) gets
+`await`ed per level so the browser has a chance to paint before the
+next level's Excel sync starts. Don't fire-and-forget the callback
+inside a tight loop — without the await, the updates queue up behind
+the compute and the user never sees intermediate states.
+
+### Diagnostic `[trace-perf]` logs are provisional
+
+Several `console.log("[trace-perf] …")` calls exist in
+`src/taskpane/traceDialog.ts` and `traceDialogLauncher.ts` — commit
+`944029c` introduced them to diagnose dialog-open latency; subsequent
+commits (`bb396c2`, `2eacc0f`) used them to validate changes. They're
+harmless in production but clutter the console. When a new perf issue
+isn't actively being diagnosed, remove them via a focused revert; they
+live behind a `logTracePerf` helper so the cleanup is localized.
 
 ### Array-formula mutation is deferred
 
