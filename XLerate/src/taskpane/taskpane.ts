@@ -1,4 +1,5 @@
 /* global Excel, Office */
+import "./ribbonActions";
 import { runAutoColor as runAutoColorService } from "../services/autoColor.service";
 import { VALUE_ERROR } from "../core/cagr";
 import { runCagrCalculator } from "../services/cagr.service";
