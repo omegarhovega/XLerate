@@ -29,9 +29,9 @@ const OUT_SIZES = [16, 32, 80];
 // used in the SVG filename.
 /** @type {Array<{ key: string; dir: string; slug: string; sourceSize: number }>} */
 const ICONS = [
-  { key: "trace-precedents", dir: "Arrow Step In", slug: "arrow_step_in", sourceSize: 20 },
-  { key: "trace-dependents", dir: "Arrow Step Out", slug: "arrow_step_out", sourceSize: 20 },
-  { key: "switch-sign", dir: "Arrow Swap", slug: "arrow_swap", sourceSize: 20 },
+  { key: "trace-precedents", dir: "Arrow Between Down", slug: "arrow_between_down", sourceSize: 20 },
+  { key: "trace-dependents", dir: "Arrow Between Up", slug: "arrow_between_up", sourceSize: 20 },
+  { key: "switch-sign", dir: "Add Subtract Circle", slug: "add_subtract_circle", sourceSize: 20 },
   { key: "smart-fill", dir: "Arrow Autofit Width", slug: "arrow_autofit_width", sourceSize: 20 },
   { key: "consistency", dir: "Checkmark Square", slug: "checkmark_square", sourceSize: 20 },
   { key: "cycle-number", dir: "Number Symbol", slug: "number_symbol", sourceSize: 20 },
