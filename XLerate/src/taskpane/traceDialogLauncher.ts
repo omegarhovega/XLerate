@@ -37,6 +37,20 @@ let activeDialog: Office.Dialog | null = null;
 type PendingCompute = { direction: TraceDirection; maxDepth: number };
 let pendingCompute: PendingCompute | null = null;
 
+// ---- Perf instrumentation (remove when diagnosis is done). ----
+// Logs boundary timestamps so we can identify which segment of the
+// open-trace-dialog flow dominates the perceived latency. Uses
+// Date.now() because the parent runtime and dialog window have
+// separate performance.now() origins; absolute epoch ms lets the
+// developer compute deltas across contexts by subtracting the "t0"
+// line. Grep `[trace-perf]` in DevTools to filter. Session tag is
+// printed once per flow so interleaved traces stay readable.
+let tracePerfSession = 0;
+function logTracePerf(label: string): void {
+  // eslint-disable-next-line no-console
+  console.log(`[trace-perf] session=${tracePerfSession} ${label} @ ${Date.now()}`);
+}
+
 /**
  * Best-effort return of keyboard focus to the Excel grid after dialog
  * close. Office.js has no direct API for "give focus to the grid", so
@@ -185,8 +199,11 @@ function parseDialogMessage(raw: unknown): DialogToParent | null {
 
 async function computeAndPushRows(request: PendingCompute): Promise<void> {
   try {
+    logTracePerf("t4 compute.start");
     const startAddress = await getActiveCellAddress();
+    logTracePerf("t4a compute.gotActiveCell");
     const computed = await computeTrace(request.direction, startAddress, request.maxDepth);
+    logTracePerf(`t5 compute.end rows=${computed.rows.length} truncated=${computed.truncated}`);
     if (!activeDialog) return;
     activeDialog.messageChild(
       JSON.stringify({
@@ -197,6 +214,7 @@ async function computeAndPushRows(request: PendingCompute): Promise<void> {
         truncated: computed.truncated,
       })
     );
+    logTracePerf("t6 messageChild.sent");
   } catch (error) {
     if (!activeDialog) return;
     const message = error instanceof Error ? error.message : String(error);
@@ -214,6 +232,7 @@ function handleDialogMessage(arg: { message?: string; origin?: string | undefine
   if (!parsed) return;
 
   if (parsed.action === "ready") {
+    logTracePerf("t3 parent.readyReceived");
     // Dialog has registered its parent-message handler; now run the BFS
     // and push rows when done. Fire-and-forget: the command handler has
     // already called event.completed() (it awaited only the dialog open).
@@ -260,12 +279,15 @@ export async function openTraceDialog(
   direction: TraceDirection,
   options: OpenTraceDialogOptions = {}
 ): Promise<void> {
+  tracePerfSession = Date.now();
+  logTracePerf(`t0 click direction=${direction}`);
   closeActiveDialog();
 
   pendingCompute = { direction, maxDepth: sanitizeTraceDepth(options.maxDepth) };
 
   const url = new URL("traceDialog.html", window.location.href);
   url.searchParams.set("direction", direction);
+  url.searchParams.set("perfSession", String(tracePerfSession));
 
   const height = typeof options.height === "number" ? options.height : 60;
   const width = typeof options.width === "number" ? options.width : 40;
@@ -280,6 +302,7 @@ export async function openTraceDialog(
           resolve();
           return;
         }
+        logTracePerf("t1 displayDialogAsync.callback");
         activeDialog = result.value;
         activeDialog.addEventHandler(Office.EventType.DialogMessageReceived, handleDialogMessage);
         activeDialog.addEventHandler(Office.EventType.DialogEventReceived, () => {

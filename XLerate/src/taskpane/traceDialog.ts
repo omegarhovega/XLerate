@@ -22,6 +22,19 @@ const ROW_FOCUSED_CLASS = "trace-row-focused";
 let currentRows: TraceRow[] = [];
 let currentFocusIndex: number | null = null;
 
+// ---- Perf instrumentation (remove when diagnosis is done). ----
+// Uses Date.now() so the dialog's timestamps line up with the parent
+// runtime's (separate performance.now() origins make relative times
+// otherwise incomparable across contexts). The `perfSession` query
+// param is set by the parent at click time; including it in each log
+// line lets the developer correlate dialog logs with parent logs when
+// multiple traces run close together.
+const perfSession = new URLSearchParams(window.location.search).get("perfSession") ?? "?";
+function logTracePerf(label: string): void {
+  // eslint-disable-next-line no-console
+  console.log(`[trace-perf] session=${perfSession} ${label} @ ${Date.now()}`);
+}
+
 function setDialogStatus(message: string): void {
   const el = document.getElementById(STATUS_ID);
   if (el) el.textContent = message;
@@ -177,7 +190,9 @@ function renderDialogTraceRows(rows: TraceRow[]): void {
     body.appendChild(tr);
   });
 
+  logTracePerf(`t7b rows.rendered count=${rows.length}`);
   focusRow(0, { announce: false });
+  logTracePerf("t8 row0.focused");
 }
 
 /**
@@ -229,6 +244,7 @@ function handleParentMessage(arg: { message?: string } | { error: number }): voi
   if (!parsed) return;
 
   if (parsed.action === "setRows") {
+    logTracePerf(`t7 setRows.received count=${parsed.rows.length}`);
     setDialogTitle(`Trace ${parsed.direction}`);
     renderDialogTraceRows(parsed.rows);
     const count = parsed.rows.length;
@@ -245,6 +261,7 @@ function handleParentMessage(arg: { message?: string } | { error: number }): voi
 }
 
 Office.onReady((info) => {
+  logTracePerf("t2 dialog.onReady");
   if (info.host !== Office.HostType.Excel) {
     setDialogStatus("Trace dialog requires Excel.");
     return;
@@ -260,6 +277,7 @@ Office.onReady((info) => {
     Office.EventType.DialogParentMessageReceived,
     handleParentMessage,
     () => {
+      logTracePerf("t2a addHandler.callback");
       sendToParent({ action: "ready" });
     }
   );
