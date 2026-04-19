@@ -28,8 +28,15 @@ import {
  */
 
 let activeDialog: Office.Dialog | null = null;
-/** Stashed until the dialog signals "ready". Then sent via messageChild. */
-let pendingRowsPayload: string | null = null;
+/**
+ * Stashed until the dialog signals "ready". The compute runs
+ * asynchronously — we open the dialog first (so Office drops its
+ * "[Add-in] is working on …" ribbon notification as soon as the
+ * command handler calls event.completed()), then on the dialog's
+ * ready signal we run the BFS and push rows via messageChild.
+ */
+type PendingCompute = { direction: TraceDirection; maxDepth: number };
+let pendingCompute: PendingCompute | null = null;
 
 /**
  * Best-effort return of keyboard focus to the Excel grid after dialog
@@ -69,7 +76,7 @@ function closeActiveDialog(): void {
       // DialogEventReceived handler anyway.
     }
     activeDialog = null;
-    pendingRowsPayload = null;
+    pendingCompute = null;
     void pullFocusToGrid();
   }
 }
@@ -174,20 +181,44 @@ function parseDialogMessage(raw: unknown): DialogToParent | null {
   return null;
 }
 
+async function computeAndPushRows(request: PendingCompute): Promise<void> {
+  try {
+    const startAddress = await getActiveCellAddress();
+    const computed = await computeTrace(request.direction, startAddress, request.maxDepth);
+    if (!activeDialog) return;
+    activeDialog.messageChild(
+      JSON.stringify({
+        action: "setRows",
+        rows: computed.rows,
+        direction: request.direction,
+        startAddress: computed.startAddress,
+        truncated: computed.truncated,
+      })
+    );
+  } catch (error) {
+    if (!activeDialog) return;
+    const message = error instanceof Error ? error.message : String(error);
+    try {
+      activeDialog.messageChild(JSON.stringify({ action: "error", message }));
+    } catch {
+      // Dialog already gone; nothing to report.
+    }
+  }
+}
+
 function handleDialogMessage(arg: { message?: string; origin?: string | undefined } | { error: number }): void {
   if (!("message" in arg) || typeof arg.message !== "string") return;
   const parsed = parseDialogMessage(arg.message);
   if (!parsed) return;
 
   if (parsed.action === "ready") {
-    // Dialog has registered its parent-message handler; safe to push rows.
-    if (activeDialog && pendingRowsPayload) {
-      try {
-        activeDialog.messageChild(pendingRowsPayload);
-      } catch {
-        // Unlikely (dialog just signaled ready); swallow.
-      }
-      pendingRowsPayload = null;
+    // Dialog has registered its parent-message handler; now run the BFS
+    // and push rows when done. Fire-and-forget: the command handler has
+    // already called event.completed() (it awaited only the dialog open).
+    if (activeDialog && pendingCompute) {
+      const request = pendingCompute;
+      pendingCompute = null;
+      void computeAndPushRows(request);
     }
     return;
   }
@@ -212,12 +243,16 @@ export type OpenTraceDialogOptions = {
 };
 
 /**
- * Open the trace dialog for the given direction. Computes the trace in
- * the parent runtime (dialogs cannot call Excel.run), stashes the rows,
- * then opens the dialog and pushes rows when the dialog signals ready.
+ * Open the trace dialog for the given direction. Returns as soon as the
+ * dialog has been spawned — the trace itself is computed asynchronously
+ * after the dialog signals `ready`, so the caller (command runtime) can
+ * call `event.completed()` immediately and Office will drop its
+ * "[Add-in] is working on …" ribbon notification. The dialog shows its
+ * static "Loading…" row while the BFS runs in the parent context.
  *
- * Caller convention in the commands runtime: after awaiting this, call
- * `event.completed()` so Office.js marks the ribbon action finished.
+ * The dialog cannot call `Excel.run` itself (documented restriction
+ * on the Office Dialog API); all host-document work stays on this
+ * side of the boundary.
  */
 export async function openTraceDialog(
   direction: TraceDirection,
@@ -225,29 +260,7 @@ export async function openTraceDialog(
 ): Promise<void> {
   closeActiveDialog();
 
-  const startAddress = await getActiveCellAddress();
-  const maxDepth = sanitizeTraceDepth(options.maxDepth);
-
-  // Compute trace BEFORE opening the dialog. If this throws (bad Excel
-  // state, unsupported API), we never open the dialog and the caller can
-  // surface the error.
-  let computed: { rows: TraceRow[]; startAddress: string; truncated: boolean };
-  try {
-    computed = await computeTrace(direction, startAddress, maxDepth);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    // Re-throw so the caller's catch (e.g. taskpane guardedRun) can surface
-    // it. The dialog doesn't open in this path.
-    throw new Error(`Trace failed: ${message}`);
-  }
-
-  pendingRowsPayload = JSON.stringify({
-    action: "setRows",
-    rows: computed.rows,
-    direction,
-    startAddress: computed.startAddress,
-    truncated: computed.truncated,
-  });
+  pendingCompute = { direction, maxDepth: sanitizeTraceDepth(options.maxDepth) };
 
   const url = new URL("traceDialog.html", window.location.href);
   url.searchParams.set("direction", direction);
@@ -261,7 +274,7 @@ export async function openTraceDialog(
       { height, width, displayInIframe: true },
       (result) => {
         if (result.status !== Office.AsyncResultStatus.Succeeded) {
-          pendingRowsPayload = null;
+          pendingCompute = null;
           resolve();
           return;
         }
@@ -269,7 +282,7 @@ export async function openTraceDialog(
         activeDialog.addEventHandler(Office.EventType.DialogMessageReceived, handleDialogMessage);
         activeDialog.addEventHandler(Office.EventType.DialogEventReceived, () => {
           activeDialog = null;
-          pendingRowsPayload = null;
+          pendingCompute = null;
         });
         resolve();
       }
