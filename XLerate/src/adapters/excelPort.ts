@@ -85,6 +85,23 @@ export type CellFormattingSnapshot = {
   edgeRightColor: string | null;
 };
 
+export type ActiveCellLeftRowSnapshot = {
+  activeCell: CellAddress;
+  leftCells: Array<{
+    address: CellAddress;
+    value: unknown;
+  }>;
+};
+
+export type AutoColorCellSnapshot = {
+  address: CellAddress;
+  isFormula: boolean;
+  formula: string;
+  value: unknown;
+  numberFormat: string;
+  hasHyperlink: boolean;
+};
+
 export type CellMutation =
   | { address: CellAddress; kind: "value"; value: unknown }
   | { address: CellAddress; kind: "formula"; formula: string }
@@ -110,6 +127,28 @@ export interface ExcelPort {
    * that only need value/formula should not pay that cost.
    */
   getSelectionFormatting(): Promise<CellFormattingSnapshot[]>;
+
+  /**
+   * Read the active cell plus every cell to its left on the same row up to the
+   * used-range boundary, ordered left-to-right. Used by the in-sheet CAGR
+   * action to discover the contiguous numeric series adjacent to the
+   * destination cell.
+   */
+  getActiveCellLeftRowSnapshot(): Promise<ActiveCellLeftRowSnapshot>;
+
+  /**
+   * Read the non-empty cells in the current selection with just the metadata
+   * needed by Auto-color. This intentionally skips blank cells so large
+   * selections do not degenerate into full-sheet scans.
+   */
+  getSelectionAutoColorCells(): Promise<AutoColorCellSnapshot[]>;
+
+  /**
+   * Apply one uniform format bundle to the current selection. This is used by
+   * formatting cycles where every selected cell receives the same style and is
+   * substantially faster than issuing one mutation per cell.
+   */
+  applySelectionFormatBundle(format: CellFormatMutation): Promise<void>;
 
   /**
    * Remove all fill color from every cell on the named sheet. Used by

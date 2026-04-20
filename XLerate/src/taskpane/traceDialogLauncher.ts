@@ -4,6 +4,7 @@ import { buildTrace, type TraceCellInfo, type TraceRow } from "../core/traceBuil
 import {
   parseWorksheetScopedAddress,
   sanitizeTraceDepth,
+  sanitizeTraceSafetyLimit,
   type TraceDirection,
 } from "../core/traceUtils";
 import {
@@ -39,7 +40,7 @@ let activeDialog: Office.Dialog | null = null;
  * gained no overlap and slightly regressed due to contention. See
  * the revert commit for the measured numbers.
  */
-type PendingCompute = { direction: TraceDirection; maxDepth: number };
+type PendingCompute = { direction: TraceDirection; maxDepth: number; safetyLimit: number };
 let pendingCompute: PendingCompute | null = null;
 let activeDialogSessionId = 0;
 
@@ -181,6 +182,7 @@ async function computeTrace(
   direction: TraceDirection,
   startAddress: string | null,
   maxDepth: number,
+  safetyLimit: number,
   onProgress?: (progress: TraceProgress) => void | Promise<void>
 ): Promise<{ rows: TraceRow[]; startAddress: string; truncated: boolean }> {
   const requires = Office.context.requirements.isSetSupported("ExcelApi", "1.12");
@@ -214,6 +216,7 @@ async function computeTrace(
     const result = await buildTrace({
       root,
       maxDepth,
+      maxRows: safetyLimit,
       getAllNeighbors,
       onProgress: onProgress
         ? async (p) => {
@@ -272,7 +275,12 @@ async function computeAndPushRows(
     // sees a filled dialog almost instantly. Subsequent levels paint
     // in as Excel's precedent-graph compute reaches them.
     let firstEmitLogged = false;
-    await computeTrace(request.direction, startAddress, request.maxDepth, async (progress) => {
+    await computeTrace(
+      request.direction,
+      startAddress,
+      request.maxDepth,
+      request.safetyLimit,
+      async (progress) => {
       if (!firstEmitLogged) {
         logTracePerf(`t5a compute.firstEmit level=${progress.level} rows=${progress.rows.length}`);
         firstEmitLogged = true;
@@ -297,7 +305,8 @@ async function computeAndPushRows(
       } catch {
         // Dialog already gone; skip rest of streaming.
       }
-    });
+      }
+    );
   } catch (error) {
     if (activeDialog !== dialog || activeDialogSessionId !== dialogSessionId) return;
     const message = error instanceof Error ? error.message : String(error);
@@ -346,6 +355,8 @@ function handleDialogMessage(
 export type OpenTraceDialogOptions = {
   /** Clamp for BFS depth; sanitized via `sanitizeTraceDepth`. */
   maxDepth?: number;
+  /** Hard cap on total rendered rows; sanitized via `sanitizeTraceSafetyLimit`. */
+  safetyLimit?: number;
   /** Dialog height in percent of screen (1-100). Defaults to 60. */
   height?: number;
   /** Dialog width in percent of screen (1-100). Defaults to 40. */
@@ -372,7 +383,11 @@ export async function openTraceDialog(
   logTracePerf(`t0 click direction=${direction}`);
   closeActiveDialog();
 
-  pendingCompute = { direction, maxDepth: sanitizeTraceDepth(options.maxDepth) };
+  pendingCompute = {
+    direction,
+    maxDepth: sanitizeTraceDepth(options.maxDepth),
+    safetyLimit: sanitizeTraceSafetyLimit(options.safetyLimit),
+  };
 
   const url = new URL("traceDialog.html", window.location.href);
   url.searchParams.set("direction", direction);

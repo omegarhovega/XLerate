@@ -36,11 +36,22 @@ export const DEFAULT_AUTO_COLOR_PALETTE: AutoColorPalette = {
 };
 
 function normalizeFormula(formula: string): string {
-  return formula.startsWith("=") ? formula.slice(1) : formula;
+  const trimmed = formula.trim();
+  if (trimmed.startsWith("{=") && trimmed.endsWith("}")) {
+    return trimmed.slice(2, -1);
+  }
+  if (trimmed.startsWith("=")) {
+    return trimmed.slice(1);
+  }
+  return trimmed;
 }
 
 function isFormulaCell(formula: string | null | undefined): boolean {
-  return typeof formula === "string" && formula.startsWith("=");
+  if (typeof formula !== "string") {
+    return false;
+  }
+  const trimmed = formula.trim();
+  return trimmed.startsWith("=") || (trimmed.startsWith("{=") && trimmed.endsWith("}"));
 }
 
 function isDateLikeFormat(numberFormat: string | null | undefined): boolean {

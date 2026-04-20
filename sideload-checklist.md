@@ -36,7 +36,7 @@ Verify these once per session. They apply to every feature.
 
 ### Ribbon tab (spec §2.1, Option B realized)
 
-The XLerate tab holds eleven buttons across four groups. Spec §2.1's
+The XLerate tab holds twelve buttons across four groups. Spec §2.1's
 split-button Format menu and the Error Wrap button (needs a text
 input) are deferred — the current layout has individual cycle
 buttons and no Error Wrap on the ribbon.
@@ -51,9 +51,9 @@ re-sideload; Excel caches manifests aggressively.
 
 - [ ] Open Excel. The ribbon shows an **XLerate** tab alongside Home,
       Insert, etc. Click it.
-- [ ] **Formulas** group contains four buttons in this order:
+- [ ] **Formulas** group contains five buttons in this order:
       **Trace Precedents**, **Trace Dependents**, **Switch Sign**,
-      **Smart Fill Right**.
+      **Smart Fill Right**, **Insert CAGR**.
 - [ ] **Auditing** group contains one button: **Horizontal Check**.
 - [ ] **Formatting** group contains five buttons:
       **Cycle Number**, **Cycle Date**, **Cycle Cell**,
@@ -82,13 +82,13 @@ ribbon wiring reaches the handler):
 - [ ] Click **Cycle Number** on a cell with a value → its number
       format advances. Click again → advances. Click **Cycle Cell**
       instead → advances the cell-format preset.
-- [ ] **Cycle Text Style** consistency check: click the ribbon
-      button; then from the taskpane click **Cycle Text Style**; they
-      should advance through the preset list in the same sequence
-      (localStorage-backed shared index — see CLAUDE.md "Move
-      text-style cycle index to localStorage").
+- [ ] Click **Cycle Text Style** on a plain cell → the next text-style
+      preset applies immediately, with no separate taskpane trigger path.
 - [ ] Click **Auto-color** on a column mixing numbers and formulas →
       each cell gets its category color per spec §3.12.
+- [ ] Click **Insert CAGR** on a destination cell with a numeric
+      series immediately to its left → the cell receives a CAGR
+      worksheet formula and a percent number format.
 - [ ] Click **Show Task Pane** → the XLerate task pane opens on the
       right (or re-activates if already open).
 
@@ -116,11 +116,16 @@ taskpane iframe, so their `[XLerate ribbon]` error logs from the
 - [ ] Numeric / text / blank cells unchanged.
 - [ ] Existing `=IFERROR(...)` wrappers nest (do not deduplicate) per spec.
 
-### CAGR calculator (spec §3.13, calculator only)
+### Insert CAGR (spec §3.13)
 
-- [ ] start=100, end=121, years=2 → `~0.100000`.
-- [ ] start=0, end=121, years=2 → `#VALUE!`.
-- [ ] Non-numeric text → `Invalid input`.
+- [ ] Row has `100`, `110`, `121` in `B5:D5`. Select `E5` and click
+      **Insert CAGR** → `E5` receives a worksheet formula equivalent
+      to `=POWER(D5/B5,1/2)-1` and shows a percent result.
+- [ ] Press **Ctrl+Z** once → both the inserted formula and the
+      percent format revert in one undo step.
+- [ ] Place text or a blank cell immediately to the left of the
+      destination → **Insert CAGR** leaves the destination cell
+      unchanged.
 
 ### Auto-color Numbers (spec §3.12)
 
@@ -154,15 +159,23 @@ taskpane iframe, so their `[XLerate ribbon]` error logs from the
 
 ### Format Settings Save / Reset (spec §3.14 / §3.15)
 
-- [ ] Edit a preset in the Format Settings JSON editor → click **Save
-      Format Settings**. Cycle that format type; the edited preset is used.
-- [ ] Click **Reset Format Settings (Defaults)** → editor textarea
-      repopulates with built-in defaults, status says "Format settings
-      reset to defaults."
-- [ ] Text-style cycle index resets (next Cycle Text Style click starts at
-      the first preset, not where it was).
-- [ ] Note: these actions DO call `saveAsync`, which is expected because
-      they don't also mutate cells; the undo chain is not at risk here.
+- [ ] Open the task pane. The settings surface shows tabs for
+      **Number Formats**, **Date Formats**, **Cell Formats**,
+      **Text Styles**, **Auto-color Palette**, and **Trace Settings**.
+- [ ] Edit a preset in the form-based editor → click **Save Settings**.
+      Cycle that format type from the ribbon; the edited preset is used.
+- [ ] Click **Load Saved Settings** after making unsaved edits →
+      the taskpane reloads the last persisted workbook settings.
+- [ ] Click **Restore Defaults** → the editor switches to built-in
+      defaults and the status line explains that saving will apply them.
+- [ ] After restoring defaults, click **Save Settings** → ribbon
+      actions use the default presets again.
+- [ ] Saving settings resets the text-style cycle index (next
+      **Cycle Text Style** click starts at the first preset, not where
+      it was).
+- [ ] Note: saving settings still calls `saveAsync`, which is expected
+      because the action updates workbook settings only; the undo chain
+      for sheet mutations is not at risk here.
 
 ### Smart Fill Right (spec §3.4)
 

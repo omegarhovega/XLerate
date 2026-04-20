@@ -1,42 +1,68 @@
 import { describe, expect, it } from "vitest";
-import { runCagrCalculator } from "../src/services/cagr.service";
-import { VALUE_ERROR } from "../src/core/cagr";
+import { ExcelPortFake } from "../src/adapters/excelPortFake";
+import { CellAddress } from "../src/adapters/excelPort";
+import { runInsertCagr } from "../src/services/cagr.service";
 
-describe("CAGR calculator contract (spec §3.13)", () => {
-  it("computes CAGR from a two-value range", () => {
-    const result = runCagrCalculator([100, 121]);
-    expect(typeof result).toBe("number");
-    expect(result as number).toBeCloseTo(0.21, 5);
+const addr = (row: number, col: number, sheet = "Sheet1"): CellAddress => ({ sheet, row, col });
+
+describe("Insert CAGR contract (spec §3.13)", () => {
+  it("inserts a CAGR formula from the contiguous numeric series to the left", async () => {
+    const port = new ExcelPortFake();
+    port.setCellValue(addr(4, 1), 100);
+    port.setCellValue(addr(4, 2), 110);
+    port.setCellValue(addr(4, 3), 121);
+    port.setSelection([addr(4, 4)]);
+
+    const result = await runInsertCagr(port);
+
+    expect(result).toEqual({
+      ok: true,
+      destination: "E5",
+      sourceRange: "B5:D5",
+      insertedFormula: "=POWER(D5/B5,1/2)-1",
+      periodCount: 2,
+    });
+
+    port.setSelection([addr(4, 4)]);
+    const [destination] = await port.getSelectionCells();
+    const [formatting] = await port.getSelectionFormatting();
+    expect(destination.formula).toBe("=POWER(D5/B5,1/2)-1");
+    expect(formatting.numberFormat).toBe("0.0%");
   });
 
-  it("computes CAGR from a three-value range", () => {
-    const result = runCagrCalculator([100, 110, 121]);
-    expect(typeof result).toBe("number");
-    expect(result as number).toBeCloseTo(0.1, 5);
+  it("stops at the first non-numeric boundary to the left", async () => {
+    const port = new ExcelPortFake();
+    port.setCellValue(addr(0, 0), 100);
+    port.setCellValue(addr(0, 1), 110);
+    port.setCellValue(addr(0, 2), "blocked");
+    port.setCellValue(addr(0, 3), 121);
+    port.setSelection([addr(0, 4)]);
+
+    const result = await runInsertCagr(port);
+
+    expect(result).toEqual({
+      ok: false,
+      reason: "no_series",
+      destination: "E1",
+    });
   });
 
-  it("returns #VALUE! when start is zero", () => {
-    expect(runCagrCalculator([0, 121])).toBe(VALUE_ERROR);
-  });
+  it("does not insert when fewer than two numeric cells are adjacent to the destination", async () => {
+    const port = new ExcelPortFake();
+    port.setCellValue(addr(0, 2), 121);
+    port.setSelection([addr(0, 3)]);
 
-  it("returns #VALUE! when only one value is supplied", () => {
-    expect(runCagrCalculator([100])).toBe(VALUE_ERROR);
-  });
+    const result = await runInsertCagr(port);
 
-  it("returns #VALUE! when start is negative", () => {
-    expect(runCagrCalculator([-100, 121])).toBe(VALUE_ERROR);
-  });
+    expect(result).toEqual({
+      ok: false,
+      reason: "no_series",
+      destination: "D1",
+    });
 
-  it("returns #VALUE! when end is zero", () => {
-    expect(runCagrCalculator([100, 0])).toBe(VALUE_ERROR);
-  });
-
-  it("returns #VALUE! for empty input", () => {
-    expect(runCagrCalculator([])).toBe(VALUE_ERROR);
-  });
-
-  it("rejects non-finite numbers", () => {
-    expect(runCagrCalculator([100, NaN])).toBe(VALUE_ERROR);
-    expect(runCagrCalculator([100, Infinity])).toBe(VALUE_ERROR);
+    port.setSelection([addr(0, 3)]);
+    const [destination] = await port.getSelectionCells();
+    expect(destination.isFormula).toBe(false);
+    expect(destination.value).toBe(null);
   });
 });

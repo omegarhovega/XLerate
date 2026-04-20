@@ -1,4 +1,4 @@
-import { CellFormatMutation, CellMutation, ExcelPort } from "../adapters/excelPort";
+import { CellFormatMutation, ExcelPort } from "../adapters/excelPort";
 import {
   computeNextTextStyle,
   DEFAULT_TEXT_STYLES,
@@ -22,7 +22,10 @@ function styleToMutation(style: TextStyleDefinition): CellFormatMutation {
       italic: style.italic,
       underline: style.underline,
     },
-    fill: { pattern: "Solid", color: style.backColor },
+    fill: {
+      pattern: style.fillPattern,
+      color: style.backColor,
+    },
     borders: {
       clearAll: true,
       top: edge && style.borderTop ? edge : undefined,
@@ -53,13 +56,7 @@ export async function runCycleTextStyle(
 
   const { index, style } = computeNextTextStyle(currentIndex, configuredStyles);
   const mutation = styleToMutation(style);
-
-  const mutations: CellMutation[] = snaps.map((s) => ({
-    address: s.address,
-    kind: "formatBundle",
-    format: mutation,
-  }));
-  await port.applyMutations(mutations);
+  await port.applySelectionFormatBundle(mutation);
 
   return { index, style };
 }

@@ -5,15 +5,15 @@ export type NumberFormatDefinition = {
 
 export const DEFAULT_NUMBER_FORMATS: NumberFormatDefinition[] = [
   {
-    name: "Comma 0 Dec Lg Align",
+    name: "No Decimals",
     formatCode: "_(* #,##0_);_(* (#,##0);_(* \"-\"_);_(@_)"
   },
   {
-    name: "Comma 1 Dec Lg Align",
+    name: "1 Decimal",
     formatCode: "_(* #,##0.0_);_(* (#,##0.0);_(* \"-\"_);_(@_)"
   },
   {
-    name: "Comma 2 Dec Lg Align",
+    name: "2 Decimals",
     formatCode: "_(* #,##0.00_);_(* (#,##0.00);_(* \"-\"_);_(@_)"
   }
 ];

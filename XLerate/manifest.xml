@@ -108,6 +108,21 @@
                     <FunctionName>runSmartFillRight</FunctionName>
                   </Action>
                 </Control>
+                <Control xsi:type="Button" id="InsertCagrBtn">
+                  <Label resid="InsertCagrBtn.Label"/>
+                  <Supertip>
+                    <Title resid="InsertCagrBtn.Label"/>
+                    <Description resid="InsertCagrBtn.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>runInsertCagr</FunctionName>
+                  </Action>
+                </Control>
               </Group>
               <Group id="AuditingGroup">
                 <Label resid="AuditingGroup.Label"/>
@@ -312,6 +327,7 @@
         <bt:String id="TraceDepBtn.Label" DefaultValue="Trace Dependents"/>
         <bt:String id="SwitchSignBtn.Label" DefaultValue="Switch Sign"/>
         <bt:String id="SmartFillBtn.Label" DefaultValue="Smart Fill Right"/>
+        <bt:String id="InsertCagrBtn.Label" DefaultValue="Insert CAGR"/>
         <bt:String id="ConsistencyBtn.Label" DefaultValue="Horizontal Check"/>
         <bt:String id="CycleNumBtn.Label" DefaultValue="Cycle Number"/>
         <bt:String id="CycleDateBtn.Label" DefaultValue="Cycle Date"/>
@@ -321,11 +337,12 @@
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="GetStarted.Description" DefaultValue="Your sample add-in loaded successfully. Open the XLerate tab on the ribbon to see available actions, or click Show Task Pane for settings and trace results."/>
-        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Open the XLerate task pane for settings, trace results, and additional actions."/>
+        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Open the XLerate task pane for settings and workbook-specific XLerate preferences."/>
         <bt:String id="TracePrecBtn.Tooltip" DefaultValue="Open a keyboard-navigable dialog listing the precedents of the active cell. Arrow keys move Excel's selection live; Esc or Enter closes."/>
         <bt:String id="TraceDepBtn.Tooltip" DefaultValue="Open a keyboard-navigable dialog listing the dependents of the active cell. Arrow keys move Excel's selection live; Esc or Enter closes."/>
         <bt:String id="SwitchSignBtn.Tooltip" DefaultValue="Negate numbers or formulas in the selection. Text cells are unchanged. Ctrl+Z undoes the whole batch."/>
         <bt:String id="SmartFillBtn.Tooltip" DefaultValue="Fill the active cell's formula to the right, bounded by the values in the three rows above the active row."/>
+        <bt:String id="InsertCagrBtn.Tooltip" DefaultValue="Insert a CAGR formula into the selected cell using the contiguous numeric series immediately to its left."/>
         <bt:String id="ConsistencyBtn.Tooltip" DefaultValue="Mark formulas in the selection as consistent (green) or inconsistent (red) with their horizontal neighbors. Ctrl+Z removes the marks."/>
         <bt:String id="CycleNumBtn.Tooltip" DefaultValue="Cycle the selection through the configured number-format presets."/>
         <bt:String id="CycleDateBtn.Tooltip" DefaultValue="Cycle the selection through the configured date-format presets."/>

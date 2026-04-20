@@ -1,17 +1,66 @@
-import { calculateCagr, CagrResult, VALUE_ERROR } from "../core/cagr";
+import { CellMutation, ExcelPort } from "../adapters/excelPort";
+import {
+  buildCagrInsertFormula,
+  CAGR_RESULT_NUMBER_FORMAT,
+  findContiguousLeftCagrSeries,
+  toA1Address,
+} from "../core/cagrInsert";
+
+export type InsertCagrResult =
+  | { ok: false; reason: "no_series"; destination: string }
+  | {
+      ok: true;
+      destination: string;
+      sourceRange: string;
+      insertedFormula: string;
+      periodCount: number;
+    };
 
 /**
- * Task pane CAGR calculator (spec §3.13). Validates input before delegating
- * to the pure core. Returns the numeric CAGR or the #VALUE! sentinel.
+ * Implements spec §3.13. Discovers the contiguous numeric series immediately
+ * left of the active cell, inserts a CAGR worksheet formula into the active
+ * cell, and applies a percent number format in the same undo step.
  */
-export function runCagrCalculator(values: number[]): CagrResult {
-  if (!Array.isArray(values) || values.length === 0) {
-    return VALUE_ERROR;
+export async function runInsertCagr(port: ExcelPort): Promise<InsertCagrResult> {
+  const snapshot = await port.getActiveCellLeftRowSnapshot();
+  const destination = toA1Address(snapshot.activeCell.row, snapshot.activeCell.col);
+  const series = findContiguousLeftCagrSeries(
+    snapshot.leftCells.map((cell) => ({
+      row: cell.address.row,
+      col: cell.address.col,
+      value: cell.value,
+    }))
+  );
+
+  if (!series) {
+    return {
+      ok: false,
+      reason: "no_series",
+      destination,
+    };
   }
-  for (const v of values) {
-    if (typeof v !== "number" || !Number.isFinite(v)) {
-      return VALUE_ERROR;
-    }
-  }
-  return calculateCagr(values);
+
+  const formula = buildCagrInsertFormula(series);
+  const mutations: CellMutation[] = [
+    {
+      address: snapshot.activeCell,
+      kind: "formula",
+      formula,
+    },
+    {
+      address: snapshot.activeCell,
+      kind: "numberFormat",
+      format: CAGR_RESULT_NUMBER_FORMAT,
+    },
+  ];
+
+  await port.applyMutations(mutations);
+
+  return {
+    ok: true,
+    destination,
+    sourceRange: `${toA1Address(series.start.row, series.start.col)}:${toA1Address(series.end.row, series.end.col)}`,
+    insertedFormula: formula,
+    periodCount: series.periodCount,
+  };
 }

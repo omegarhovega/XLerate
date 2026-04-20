@@ -66,4 +66,36 @@ describe("Cycle Text Style contract (spec §3.10)", () => {
     const snaps = await port.getSelectionFormatting();
     expect(snaps.every((s) => s.fontSize === 14)).toBe(true);
   });
+
+  it("supports styles with no fill", async () => {
+    const port = new ExcelPortFake();
+    port.setCellFormatting(addr(0, 0), {
+      fillPattern: "Solid",
+      fillColor: "#FFFF00",
+    });
+    port.setSelection([addr(0, 0)]);
+    await runCycleTextStyle(port, -1, [
+      {
+        name: "Plain",
+        fontName: "Calibri",
+        fontSize: 11,
+        bold: false,
+        italic: false,
+        underline: false,
+        fontColor: "#000000",
+        fillPattern: "None",
+        backColor: "#FFFFFF",
+        borderStyle: "None",
+        borderTop: false,
+        borderBottom: false,
+        borderLeft: false,
+        borderRight: false,
+      },
+    ]);
+
+    port.setSelection([addr(0, 0)]);
+    const [snap] = await port.getSelectionFormatting();
+    expect(snap.fillPattern).toBe(null);
+    expect(snap.fillColor).toBe(null);
+  });
 });

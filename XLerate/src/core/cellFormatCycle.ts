@@ -192,7 +192,14 @@ export function doesSelectionMatchCellFormat(state: SelectionCellFormatState, ex
   if (!doesFillMatch(state, expected)) {
     return false;
   }
-  if (normalizeColor(state.fontColor) !== normalizeColor(expected.fontColor)) {
+
+  const actualFontColor = normalizeColor(state.fontColor);
+  const expectedFontColor = normalizeColor(expected.fontColor);
+  const fontColorMatches =
+    actualFontColor === expectedFontColor ||
+    (actualFontColor === null && expectedFontColor === "#000000");
+
+  if (!fontColorMatches) {
     return false;
   }
 

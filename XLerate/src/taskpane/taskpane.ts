@@ -1,48 +1,70 @@
-/* global Excel, Office */
+/* global Office */
 
 import "./ribbonActions";
-import { VALUE_ERROR } from "../core/cagr";
-import { FORMAT_SETTINGS_KEY, resolveFormatSettings, type ResolvedFormatSettings } from "../core/formatSettings";
-import { runCagrCalculator } from "../services/cagr.service";
+import { clearAutoColorProbeLog, readAutoColorProbeLog } from "../adapters/autoColorProbe";
+import {
+  buildDefaultFormatSettings,
+  FORMAT_SETTINGS_KEY,
+  getFormatSettingsValidationError,
+  resolveFormatSettings,
+  type ResolvedFormatSettings,
+} from "../core/formatSettings";
 import { resetTextStyleCycleIndex } from "./cycleStateStorage";
+import { initSettingsWorkspace } from "./settingsWorkspace";
 
-type CellValue = string | number | boolean | null;
+const SETTINGS_FILE_NAME = "xlerate-settings.json";
+const SETTINGS_FILE_ACCEPT = ".json";
 
-const FORMAT_SETTINGS_EDITOR_ID = "format-settings-json";
+type FilePickerAcceptType = {
+  description?: string;
+  accept: Record<string, string[]>;
+};
+
+type OpenFilePickerOptions = {
+  excludeAcceptAllOption?: boolean;
+  id?: string;
+  multiple?: boolean;
+  startIn?: "documents" | "downloads";
+  types?: FilePickerAcceptType[];
+};
+
+type SaveFilePickerOptions = {
+  excludeAcceptAllOption?: boolean;
+  id?: string;
+  suggestedName?: string;
+  startIn?: "documents" | "downloads";
+  types?: FilePickerAcceptType[];
+};
+
+type FileSystemWritableFileStreamLike = {
+  write(data: string): Promise<void>;
+  close(): Promise<void>;
+};
+
+type FileSystemFileHandleLike = {
+  createWritable?: () => Promise<FileSystemWritableFileStreamLike>;
+  getFile?: () => Promise<File>;
+};
+
+type WindowWithFilePickers = Window & {
+  showOpenFilePicker?: (options?: OpenFilePickerOptions) => Promise<FileSystemFileHandleLike[]>;
+  showSaveFilePicker?: (options?: SaveFilePickerOptions) => Promise<FileSystemFileHandleLike>;
+};
+
+type AutoColorDebugHelpers = {
+  clearAutoColorProbes: () => void;
+  readAutoColorProbes: () => unknown;
+};
+
+type WindowWithAutoColorDebug = WindowWithFilePickers & {
+  __xlerateDebug?: AutoColorDebugHelpers;
+};
 
 function setStatus(message: string): void {
   const target = document.getElementById("status-text");
   if (target) {
     target.textContent = message;
   }
-}
-
-function setCagrResult(message: string): void {
-  const target = document.getElementById("cagr-result");
-  if (target) {
-    target.textContent = message;
-  }
-}
-
-function getFormatSettingsEditor(): HTMLTextAreaElement | null {
-  const node = document.getElementById(FORMAT_SETTINGS_EDITOR_ID);
-  return node instanceof HTMLTextAreaElement ? node : null;
-}
-
-function setFormatSettingsEditorText(value: string): void {
-  const editor = getFormatSettingsEditor();
-  if (editor) {
-    editor.value = value;
-  }
-}
-
-function getFormatSettingsEditorText(): string | null {
-  const editor = getFormatSettingsEditor();
-  return editor ? editor.value : null;
-}
-
-function stringifyFormatSettings(settings: ResolvedFormatSettings): string {
-  return JSON.stringify(settings, null, 2);
 }
 
 // Office.context.document.settings.saveAsync breaks the native Excel undo
@@ -66,105 +88,130 @@ function readResolvedFormatSettings(): ResolvedFormatSettings {
   return resolveFormatSettings(raw);
 }
 
-async function clearFormatSettingsAndCycleState(): Promise<void> {
-  Office.context.document.settings.remove(FORMAT_SETTINGS_KEY);
-  await saveDocumentSettingsAsync();
-  resetTextStyleCycleIndex();
+function settingsFilePickerTypes(): FilePickerAcceptType[] {
+  return [
+    {
+      description: "XLerate settings",
+      accept: {
+        "application/json": [SETTINGS_FILE_ACCEPT],
+      },
+    },
+  ];
 }
 
-async function writeFormatSettingsAndResetCycleState(settings: ResolvedFormatSettings): Promise<void> {
-  Office.context.document.settings.set(FORMAT_SETTINGS_KEY, JSON.stringify(settings));
-  await saveDocumentSettingsAsync();
-  resetTextStyleCycleIndex();
-}
-
-async function runResetFormatSettings(): Promise<void> {
-  await clearFormatSettingsAndCycleState();
-  setFormatSettingsEditorText(stringifyFormatSettings(resolveFormatSettings(undefined)));
-  setStatus("Format settings reset to defaults.");
-}
-
-async function runLoadFormatSettingsEditor(): Promise<void> {
-  const settings = readResolvedFormatSettings();
-  setFormatSettingsEditorText(stringifyFormatSettings(settings));
-  setStatus("Loaded saved format settings into editor.");
-}
-
-async function runLoadDefaultFormatSettingsEditor(): Promise<void> {
-  const defaults = resolveFormatSettings(undefined);
-  setFormatSettingsEditorText(stringifyFormatSettings(defaults));
-  setStatus("Loaded default format settings into editor.");
-}
-
-async function runSaveFormatSettingsFromEditor(): Promise<void> {
-  const raw = getFormatSettingsEditorText();
-  if (raw === null) {
-    setStatus("Format settings editor not found.");
-    return;
-  }
-
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) {
-    setStatus("Format settings editor is empty.");
-    return;
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(trimmed);
-  } catch {
-    setStatus("Format settings JSON is invalid.");
-    return;
-  }
-
-  const resolved = resolveFormatSettings(parsed);
-  await writeFormatSettingsAndResetCycleState(resolved);
-  setFormatSettingsEditorText(stringifyFormatSettings(resolved));
-  setStatus("Format settings saved. Cycle state reset.");
-}
-
-async function runCagr(): Promise<void> {
-  await Excel.run(async (context) => {
-    const range = context.workbook.getSelectedRange();
-    range.load(["values", "rowCount", "columnCount"]);
-    await context.sync();
-
-    const values: number[] = [];
-    for (let r = 0; r < range.rowCount; r += 1) {
-      for (let c = 0; c < range.columnCount; c += 1) {
-        const raw = range.values[r][c] as CellValue;
-        const parsed = typeof raw === "number" ? raw : Number(raw);
-        if (!Number.isFinite(parsed)) {
-          setCagrResult(VALUE_ERROR);
-          setStatus("CAGR failed: selected range includes non-numeric values.");
-          return;
-        }
-        values.push(parsed);
+function promptForSettingsFile(): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = SETTINGS_FILE_ACCEPT;
+    input.style.position = "fixed";
+    input.style.left = "-9999px";
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      input.remove();
+      if (file) {
+        resolve(file);
+      } else {
+        reject(new Error("No settings file selected."));
       }
-    }
-
-    const result = runCagrCalculator(values);
-    if (result === VALUE_ERROR) {
-      setCagrResult(VALUE_ERROR);
-      setStatus("CAGR returned #VALUE! based on baseline rules.");
-      return;
-    }
-
-    const formatted = result.toFixed(10);
-    setCagrResult(formatted);
-    setStatus("CAGR calculated successfully.");
+    });
+    document.body.appendChild(input);
+    input.click();
   });
 }
 
-async function guardedRun(action: () => Promise<void>): Promise<void> {
-  try {
-    await action();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    setStatus(`Error: ${message}`);
-    // eslint-disable-next-line no-console
-    console.error(error);
+async function loadSettingsFromFile(): Promise<ResolvedFormatSettings> {
+  const pickerWindow = window as WindowWithFilePickers;
+  let file: File | null = null;
+
+  if (typeof pickerWindow.showOpenFilePicker === "function") {
+    const [handle] = await pickerWindow.showOpenFilePicker({
+      excludeAcceptAllOption: true,
+      id: "xlerate-settings",
+      multiple: false,
+      startIn: "documents",
+      types: settingsFilePickerTypes(),
+    });
+    if (!handle?.getFile) {
+      throw new Error("Could not open the selected settings file.");
+    }
+    file = await handle.getFile();
+  } else {
+    file = await promptForSettingsFile();
   }
+
+  const text = await file.text();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("The selected settings file is not valid JSON.");
+  }
+
+  const resolved = resolveFormatSettings(parsed);
+  const validationError = getFormatSettingsValidationError(resolved);
+  if (validationError) {
+    throw new Error(validationError);
+  }
+
+  return resolved;
+}
+
+async function exportSettingsToFile(settings: ResolvedFormatSettings): Promise<void> {
+  const pickerWindow = window as WindowWithFilePickers;
+  const text = JSON.stringify(settings, null, 2);
+
+  if (typeof pickerWindow.showSaveFilePicker === "function") {
+    const handle = await pickerWindow.showSaveFilePicker({
+      excludeAcceptAllOption: true,
+      id: "xlerate-settings",
+      suggestedName: SETTINGS_FILE_NAME,
+      startIn: "documents",
+      types: settingsFilePickerTypes(),
+    });
+    if (!handle?.createWritable) {
+      throw new Error("Could not create the settings export file.");
+    }
+
+    const writable = await handle.createWritable();
+    await writable.write(text);
+    await writable.close();
+    return;
+  }
+
+  const blob = new Blob([text], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = SETTINGS_FILE_NAME;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function saveWorkbookSettings(settings: ResolvedFormatSettings): Promise<void> {
+  const defaults = buildDefaultFormatSettings();
+  if (JSON.stringify(settings) === JSON.stringify(defaults)) {
+    Office.context.document.settings.remove(FORMAT_SETTINGS_KEY);
+  } else {
+    Office.context.document.settings.set(FORMAT_SETTINGS_KEY, JSON.stringify(settings));
+  }
+  await saveDocumentSettingsAsync();
+  resetTextStyleCycleIndex();
+}
+
+function installAutoColorProbeHelpers(): void {
+  const debugWindow = window as WindowWithAutoColorDebug;
+  debugWindow.__xlerateDebug = {
+    clearAutoColorProbes: () => {
+      clearAutoColorProbeLog();
+    },
+    readAutoColorProbes: () => {
+      const probes = readAutoColorProbeLog();
+      // eslint-disable-next-line no-console
+      console.log("[xlerate-debug] readAutoColorProbes", probes);
+      return probes;
+    },
+  };
 }
 
 Office.onReady((info) => {
@@ -179,19 +226,14 @@ Office.onReady((info) => {
     appBody.style.display = "block";
   }
 
-  setFormatSettingsEditorText(stringifyFormatSettings(readResolvedFormatSettings()));
+  initSettingsWorkspace({
+    initialSettings: readResolvedFormatSettings(),
+    loadSavedSettings: loadSettingsFromFile,
+    exportSettings: exportSettingsToFile,
+    saveSettings: saveWorkbookSettings,
+    onStatus: setStatus,
+  });
+  installAutoColorProbeHelpers();
 
-  document
-    .getElementById("load-format-settings")
-    ?.addEventListener("click", () => guardedRun(runLoadFormatSettingsEditor));
-  document
-    .getElementById("load-default-format-settings")
-    ?.addEventListener("click", () => guardedRun(runLoadDefaultFormatSettingsEditor));
-  document
-    .getElementById("save-format-settings")
-    ?.addEventListener("click", () => guardedRun(runSaveFormatSettingsFromEditor));
-  document
-    .getElementById("run-reset-format-settings")
-    ?.addEventListener("click", () => guardedRun(runResetFormatSettings));
-  document.getElementById("run-cagr")?.addEventListener("click", () => guardedRun(runCagr));
+  setStatus("Ribbon actions are live on the XLerate tab. Workbook settings are ready.");
 });

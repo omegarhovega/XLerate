@@ -108,6 +108,59 @@ describe("ExcelPortFake", () => {
     expect(await port.getSelectionFormatting()).toEqual([]);
   });
 
+  it("returns the active cell row snapshot used by Insert CAGR", async () => {
+    const port = new ExcelPortFake();
+    port.setCellValue(addr(0, 0), 100);
+    port.setCellValue(addr(0, 1), 110);
+    port.setCellValue(addr(0, 2), 121);
+    port.setSelection([addr(0, 3)]);
+
+    expect(await port.getActiveCellLeftRowSnapshot()).toEqual({
+      activeCell: addr(0, 3),
+      leftCells: [
+        { address: addr(0, 0), value: 100 },
+        { address: addr(0, 1), value: 110 },
+        { address: addr(0, 2), value: 121 },
+      ],
+    });
+  });
+
+  it("returns only non-empty auto-color candidates from the selection", async () => {
+    const port = new ExcelPortFake();
+    port.setCellValue(addr(0, 0), 100);
+    port.setCellFormula(addr(0, 1), "=A1");
+    port.setCellValue(addr(0, 2), "hello");
+    port.setCellHyperlink(addr(0, 2), true);
+    port.setSelection([addr(0, 0), addr(0, 1), addr(0, 2), addr(0, 3)]);
+
+    expect(await port.getSelectionAutoColorCells()).toEqual([
+      {
+        address: addr(0, 0),
+        isFormula: false,
+        formula: "",
+        value: 100,
+        numberFormat: "General",
+        hasHyperlink: false,
+      },
+      {
+        address: addr(0, 1),
+        isFormula: true,
+        formula: "=A1",
+        value: undefined,
+        numberFormat: "General",
+        hasHyperlink: false,
+      },
+      {
+        address: addr(0, 2),
+        isFormula: false,
+        formula: "",
+        value: "hello",
+        numberFormat: "General",
+        hasHyperlink: true,
+      },
+    ]);
+  });
+
   it("reports default formatting for a cell with a value only", async () => {
     const port = new ExcelPortFake();
     port.setCellValue(addr(0, 0), 100);

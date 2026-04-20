@@ -6,7 +6,9 @@ export type ParsedTraceAddress = {
 
 export const DEFAULT_TRACE_MAX_DEPTH = 10;
 export const MAX_TRACE_MAX_DEPTH = 20;
-export const MAX_TRACE_ROWS = 500;
+export const DEFAULT_TRACE_SAFETY_LIMIT = 500;
+export const MAX_TRACE_SAFETY_LIMIT = 5000;
+export const MAX_TRACE_ROWS = DEFAULT_TRACE_SAFETY_LIMIT;
 
 export function sanitizeTraceDepth(raw: unknown): number {
   if (typeof raw !== "number" || !Number.isFinite(raw)) {
@@ -20,6 +22,23 @@ export function sanitizeTraceDepth(raw: unknown): number {
 
   if (normalized > MAX_TRACE_MAX_DEPTH) {
     return MAX_TRACE_MAX_DEPTH;
+  }
+
+  return normalized;
+}
+
+export function sanitizeTraceSafetyLimit(raw: unknown): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return DEFAULT_TRACE_SAFETY_LIMIT;
+  }
+
+  const normalized = Math.trunc(raw);
+  if (normalized < 1) {
+    return 1;
+  }
+
+  if (normalized > MAX_TRACE_SAFETY_LIMIT) {
+    return MAX_TRACE_SAFETY_LIMIT;
   }
 
   return normalized;

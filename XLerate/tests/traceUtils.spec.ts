@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_TRACE_SAFETY_LIMIT,
   buildTraceCellKey,
   DEFAULT_TRACE_MAX_DEPTH,
   formatTraceFormula,
   formatTraceValue,
+  MAX_TRACE_SAFETY_LIMIT,
   MAX_TRACE_MAX_DEPTH,
   MAX_TRACE_ROWS,
   parseWorksheetScopedAddress,
   sanitizeTraceDepth,
+  sanitizeTraceSafetyLimit,
   scalarFromMatrix,
 } from "../src/core/traceUtils";
 
@@ -20,6 +23,16 @@ describe("trace utils", () => {
     expect(sanitizeTraceDepth(0)).toBe(1);
     expect(sanitizeTraceDepth(1.9)).toBe(1);
     expect(sanitizeTraceDepth(MAX_TRACE_MAX_DEPTH + 10)).toBe(MAX_TRACE_MAX_DEPTH);
+  });
+
+  it("sanitizes the trace safety limit to allowed bounds", () => {
+    expect(DEFAULT_TRACE_SAFETY_LIMIT).toBe(500);
+    expect(MAX_TRACE_ROWS).toBe(DEFAULT_TRACE_SAFETY_LIMIT);
+    expect(sanitizeTraceSafetyLimit(undefined)).toBe(DEFAULT_TRACE_SAFETY_LIMIT);
+    expect(sanitizeTraceSafetyLimit(NaN)).toBe(DEFAULT_TRACE_SAFETY_LIMIT);
+    expect(sanitizeTraceSafetyLimit(0)).toBe(1);
+    expect(sanitizeTraceSafetyLimit(25.9)).toBe(25);
+    expect(sanitizeTraceSafetyLimit(MAX_TRACE_SAFETY_LIMIT + 1)).toBe(MAX_TRACE_SAFETY_LIMIT);
   });
 
   it("extracts scalar values from 2D matrices", () => {

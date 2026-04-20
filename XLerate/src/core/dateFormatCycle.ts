@@ -18,13 +18,46 @@ export const DEFAULT_DATE_FORMATS: DateFormatDefinition[] = [
   }
 ];
 
+function normalizeDateFormatCode(formatCode: string): string {
+  const compact = formatCode
+    .trim()
+    .toLowerCase()
+    .replace(/\[\$-[^\]]+\]/g, "")
+    .replace(/\\/g, "")
+    .replace(/\s+/g, " ");
+
+  let result = "";
+  for (let i = 0; i < compact.length; ) {
+    if (compact[i] !== "d") {
+      result += compact[i];
+      i += 1;
+      continue;
+    }
+
+    let j = i;
+    while (j < compact.length && compact[j] === "d") {
+      j += 1;
+    }
+
+    const count = j - i;
+    result += count === 2 ? "d" : "d".repeat(count);
+    i = j;
+  }
+
+  return result;
+}
+
+function matchesDateFormat(actual: string, expected: string): boolean {
+  return normalizeDateFormatCode(actual) === normalizeDateFormatCode(expected);
+}
+
 export function hasMixedDateFormats(formats: string[]): boolean {
   if (formats.length <= 1) {
     return false;
   }
 
   const first = formats[0];
-  return formats.some((value) => value !== first);
+  return formats.some((value) => !matchesDateFormat(value, first));
 }
 
 export function computeNextDateFormat(
@@ -40,7 +73,9 @@ export function computeNextDateFormat(
     return configuredFormats[0].formatCode;
   }
 
-  const index = configuredFormats.findIndex((item) => item.formatCode === currentFormat);
+  const index = configuredFormats.findIndex((item) =>
+    matchesDateFormat(currentFormat, item.formatCode)
+  );
   if (index < 0) {
     return configuredFormats[0].formatCode;
   }

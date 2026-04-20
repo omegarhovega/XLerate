@@ -1,3 +1,5 @@
+export type TextStyleFillPattern = "Solid" | "None";
+
 export type TextStyleDefinition = {
   name: string;
   fontName: string;
@@ -6,6 +8,7 @@ export type TextStyleDefinition = {
   italic: boolean;
   underline: boolean;
   fontColor: string;
+  fillPattern: TextStyleFillPattern;
   backColor: string;
   borderStyle: "None" | "Continuous" | "Double" | "Dash" | "Dot";
   borderTop: boolean;
@@ -23,6 +26,7 @@ export const DEFAULT_TEXT_STYLES: TextStyleDefinition[] = [
     italic: false,
     underline: false,
     fontColor: "#000000",
+    fillPattern: "Solid",
     backColor: "#F0F0F0",
     borderStyle: "Continuous",
     borderTop: true,
@@ -38,6 +42,7 @@ export const DEFAULT_TEXT_STYLES: TextStyleDefinition[] = [
     italic: false,
     underline: false,
     fontColor: "#595959",
+    fillPattern: "Solid",
     backColor: "#F5F5F5",
     borderStyle: "Continuous",
     borderTop: false,
@@ -53,6 +58,7 @@ export const DEFAULT_TEXT_STYLES: TextStyleDefinition[] = [
     italic: false,
     underline: true,
     fontColor: "#000000",
+    fillPattern: "Solid",
     backColor: "#FFFFFF",
     borderStyle: "Double",
     borderTop: true,
@@ -68,6 +74,7 @@ export const DEFAULT_TEXT_STYLES: TextStyleDefinition[] = [
     italic: false,
     underline: false,
     fontColor: "#000000",
+    fillPattern: "Solid",
     backColor: "#FFFFFF",
     borderStyle: "None",
     borderTop: false,

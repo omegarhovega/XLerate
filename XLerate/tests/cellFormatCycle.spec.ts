@@ -47,6 +47,7 @@ describe("cycle cell format baseline parity", () => {
     const normalLike: SelectionCellFormatState = {
       ...stateFromPreset(0),
       fillPattern: "None",
+      fontColor: null,
       fontBold: null,
       fontItalic: null,
       fontUnderline: null,
@@ -59,6 +60,21 @@ describe("cycle cell format baseline parity", () => {
 
     expect(doesSelectionMatchCellFormat(normalLike, DEFAULT_CELL_FORMATS[0])).toBe(true);
     expect(computeNextCellFormat(normalLike).name).toBe("Inputs");
+  });
+
+  it("matches black-font presets when Excel reports automatic font color as null", () => {
+    const importantLike: SelectionCellFormatState = {
+      ...stateFromPreset(DEFAULT_CELL_FORMATS.length - 1),
+      fontColor: null
+    };
+
+    expect(
+      doesSelectionMatchCellFormat(
+        importantLike,
+        DEFAULT_CELL_FORMATS[DEFAULT_CELL_FORMATS.length - 1]
+      )
+    ).toBe(true);
+    expect(computeNextCellFormat(importantLike).name).toBe("Normal");
   });
 
   it("matches Normal when Excel reports fillPattern=null with fillColor=#FFFFFF (Desktop quirk)", () => {

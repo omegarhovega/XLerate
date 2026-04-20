@@ -16,55 +16,17 @@
     <link href="taskpane.css" rel="stylesheet" type="text/css" />
   </head>
   <body class="ms-Fabric">
-    <section id="sideload-msg" class="app">
+    <section id="sideload-msg" class="app-shell">
       <h3>Please sideload the add-in to use XLerate actions.</h3>
     </section>
 
-    <main id="app-body" class="app" style="display: none">
-      <header class="header">
-        <img width="32" height="32" src="../../assets/icon-32.png" alt="XLerate" />
-        <h1>XLerate</h1>
-      </header>
+    <main id="app-body" class="app-shell" style="display: none">
+      <div id="settings-workspace"></div>
 
-      <div class="panel">
-        <h3>Ribbon-first workflow</h3>
-        <p>
-          Run day-to-day XLerate actions from the <strong>XLerate</strong> ribbon tab or add them
-          to Excel's Quick Access Toolbar. The task pane is reserved for settings and the CAGR
-          calculator so the same worksheet action does not have duplicate trigger paths.
-        </p>
-      </div>
-
-      <div class="panel">
-        <h3>CAGR</h3>
-        <p>Select a range, then calculate CAGR from first to last value.</p>
-        <button id="run-cagr" class="action-btn">Calculate CAGR</button>
-        <div class="result">Result: <span id="cagr-result">-</span></div>
-      </div>
-
-      <div class="panel">
-        <h3>Format Settings</h3>
-        <p>Edit JSON for number/date/cell/text presets used by the ribbon actions.</p>
-        <div class="row">
-          <label for="format-settings-json">Settings JSON</label>
-          <textarea id="format-settings-json" class="mono-input" rows="14"></textarea>
-        </div>
-        <button id="load-format-settings" class="action-btn secondary-btn">
-          Load Saved Settings
-        </button>
-        <button id="load-default-format-settings" class="action-btn secondary-btn">
-          Load Defaults
-        </button>
-        <button id="save-format-settings" class="action-btn">Save Format Settings</button>
-        <button id="run-reset-format-settings" class="action-btn">
-          Reset Format Settings (Defaults)
-        </button>
-      </div>
-
-      <div class="panel status">
+      <section class="status-strip">
         <strong>Status</strong>
         <p id="status-text">Ready.</p>
-      </div>
+      </section>
     </main>
   </body>
 </html>

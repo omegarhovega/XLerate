@@ -8,6 +8,7 @@ describe("cycle date format baseline parity", () => {
 
     expect(hasMixedDateFormats([first])).toBe(false);
     expect(hasMixedDateFormats([first, first, first])).toBe(false);
+    expect(hasMixedDateFormats(["dd-mmm-yy", "d-mmm-yy"])).toBe(false);
     expect(hasMixedDateFormats([first, second])).toBe(true);
   });
 
@@ -47,5 +48,16 @@ describe("cycle date format baseline parity", () => {
     expect(computeNextDateFormat("yyyy-mm", false, customFormats)).toBe("dd/mm/yyyy");
     expect(computeNextDateFormat("dd/mm/yyyy", false, customFormats)).toBe("yyyy-mm");
     expect(computeNextDateFormat("General", false, customFormats)).toBe("yyyy-mm");
+  });
+
+  it("treats Excel-normalized day tokens as the same preset", () => {
+    const customFormats = [
+      { name: "Year Only", formatCode: "yyyy" },
+      { name: "Month Year", formatCode: "mmm-yyyy" },
+      { name: "Full Date", formatCode: "dd-mmm-yy" },
+      { name: "Verbose", formatCode: "dddd-mm-yyyy" }
+    ];
+
+    expect(computeNextDateFormat("d-mmm-yy", false, customFormats)).toBe("dddd-mm-yyyy");
   });
 });

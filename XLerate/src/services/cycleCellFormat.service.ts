@@ -1,9 +1,4 @@
-import {
-  CellFormatMutation,
-  CellFormattingSnapshot,
-  CellMutation,
-  ExcelPort,
-} from "../adapters/excelPort";
+import { CellFormatMutation, CellFormattingSnapshot, ExcelPort } from "../adapters/excelPort";
 import {
   CellFormatDefinition,
   computeNextCellFormat,
@@ -69,11 +64,5 @@ export async function runCycleCellFormat(
   const state = snapshotToState(snaps[0]);
   const next = computeNextCellFormat(state, configuredFormats);
   const mutation = definitionToMutation(next);
-
-  const mutations: CellMutation[] = snaps.map((s) => ({
-    address: s.address,
-    kind: "formatBundle",
-    format: mutation,
-  }));
-  await port.applyMutations(mutations);
+  await port.applySelectionFormatBundle(mutation);
 }

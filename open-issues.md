@@ -11,14 +11,6 @@ the current branch. It should describe repo reality, not ideal future state.
 
 ## Product behavior
 
-- The settings editor is still a raw JSON editor. It should be replaced with
-  a professional Excel-like settings UI (forms, reorderable lists, labeled
-  controls) rather than exposing raw JSON to end users.
-
-- CAGR is still exposed as a taskpane calculator. The desired product shape is
-  an in-sheet action/function that derives its numeric input range from cells
-  adjacent to the active cell and writes the CAGR result into the selected cell.
-
 - The spec-defined keyboard shortcuts are not fully represented in the
   manifest/runtime yet.
 
@@ -50,6 +42,14 @@ the current branch. It should describe repo reality, not ideal future state.
   `localStorage` persistence.
 
 - The task pane no longer duplicates ribbon-first worksheet action buttons.
+
+- The task pane settings surface is now a form-based editor with reorderable
+  lists for number/date/cell/text presets plus the auto-color palette and
+  trace defaults.
+
+- CAGR is now exposed as an in-sheet ribbon action that inserts a worksheet
+  formula into the selected destination cell from the contiguous numeric series
+  immediately to its left.
 
 - Production builds now default to the GitHub Pages host instead of the
   Contoso placeholder URL.

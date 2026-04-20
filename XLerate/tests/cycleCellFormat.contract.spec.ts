@@ -66,6 +66,8 @@ describe("Cycle Cell Format contract (spec §3.8)", () => {
 
   it("applies to every cell in the selection", async () => {
     const port = new ExcelPortFake();
+    port.setCellFormatting(addr(0, 0), { fillColor: "#ABCDEF" });
+    port.setCellFormatting(addr(1, 0), { fillColor: "#ABCDEF" });
     port.setSelection([addr(0, 0), addr(1, 0)]);
     await runCycleCellFormat(port);
     port.setSelection([addr(0, 0), addr(1, 0)]);

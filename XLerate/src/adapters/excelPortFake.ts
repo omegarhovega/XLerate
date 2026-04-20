@@ -1,5 +1,8 @@
 import {
+  ActiveCellLeftRowSnapshot,
+  AutoColorCellSnapshot,
   CellAddress,
+  CellFormatMutation,
   CellFormattingSnapshot,
   CellMutation,
   CellSnapshot,
@@ -104,6 +107,59 @@ export class ExcelPortFake implements ExcelPort {
       const fmt = this.formatting.get(key(address)) ?? defaultFormatting();
       return { address, ...fmt };
     });
+  }
+
+  async getActiveCellLeftRowSnapshot(): Promise<ActiveCellLeftRowSnapshot> {
+    const activeCell = this.selection[0] ?? { sheet: "Sheet1", row: 0, col: 0 };
+    const leftCells = Array.from({ length: activeCell.col }, (_, index) => {
+      const address = { sheet: activeCell.sheet, row: activeCell.row, col: index };
+      const state = this.cells.get(key(address)) ?? { kind: "empty" as const };
+      return {
+        address,
+        value: state.kind === "value" ? state.value : null,
+      };
+    });
+
+    return {
+      activeCell,
+      leftCells,
+    };
+  }
+
+  async getSelectionAutoColorCells(): Promise<AutoColorCellSnapshot[]> {
+    return this.selection
+      .map((address) => {
+        const state = this.cells.get(key(address)) ?? { kind: "empty" as const };
+        const fmt = this.formatting.get(key(address)) ?? defaultFormatting();
+        const isFormula = state.kind === "formula";
+        const value = state.kind === "value" ? state.value : null;
+        const hasMeaningfulValue =
+          isFormula || (value !== null && value !== undefined && value !== "");
+
+        if (!hasMeaningfulValue && !fmt.hasHyperlink) {
+          return null;
+        }
+
+        return {
+          address,
+          isFormula,
+          formula: isFormula ? state.formula : "",
+          value: isFormula ? undefined : value,
+          numberFormat: fmt.numberFormat,
+          hasHyperlink: fmt.hasHyperlink,
+        };
+      })
+      .filter((cell): cell is AutoColorCellSnapshot => cell !== null);
+  }
+
+  async applySelectionFormatBundle(format: CellFormatMutation): Promise<void> {
+    await this.applyMutations(
+      this.selection.map((address) => ({
+        address,
+        kind: "formatBundle" as const,
+        format,
+      }))
+    );
   }
 
   async applyMutations(mutations: CellMutation[]): Promise<void> {

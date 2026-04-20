@@ -60,6 +60,24 @@ describe("auto color baseline parity", () => {
     ).toBe("worksheetLink");
   });
 
+  it("classifies wrapped array-formula syntax the same as regular formulas", () => {
+    expect(
+      classifyAutoColorCell({
+        formula: "{=A1}",
+        value: 123,
+        numberFormat: "General",
+      })
+    ).toBe("worksheetLink");
+
+    expect(
+      classifyAutoColorCell({
+        formula: "{=IF(TRUE,1,0)}",
+        value: 1,
+        numberFormat: "General",
+      })
+    ).toBe("input");
+  });
+
   it("classifies workbook link formulas", () => {
     expect(
       classifyAutoColorCell({
