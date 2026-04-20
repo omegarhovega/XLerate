@@ -2,15 +2,15 @@
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0" xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="TaskPaneApp">
   <Id>e3afbfd8-06fa-47f9-a862-bdc61ed6e9bf</Id>
   <Version>1.0.0.0</Version>
-  <ProviderName>Contoso</ProviderName>
+  <ProviderName>XLerate</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="XLerate"/>
-  <Description DefaultValue="A template to get started."/>
+  <Description DefaultValue="Excel add-in for financial modeling workflows, auditing, formatting cycles, and trace navigation."/>
   <IconUrl DefaultValue="https://localhost:3000/assets/icon-32.png"/>
   <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>
-  <SupportUrl DefaultValue="https://www.contoso.com/help"/>
+  <SupportUrl DefaultValue="https://github.com/omegarhovega/XLerate/issues"/>
   <AppDomains>
-    <AppDomain>https://www.contoso.com</AppDomain>
+    <AppDomain>https://omegarhovega.github.io</AppDomain>
   </AppDomains>
   <Hosts>
     <Host Name="Workbook"/>
@@ -22,6 +22,8 @@
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
     <Requirements>
       <bt:Sets DefaultMinVersion="1.1">
+        <bt:Set Name="ExcelApi" MinVersion="1.12"/>
+        <bt:Set Name="ExcelApiDesktop" MinVersion="1.1"/>
         <bt:Set Name="SharedRuntime" MinVersion="1.1"/>
       </bt:Sets>
     </Requirements>

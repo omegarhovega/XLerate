@@ -27,25 +27,12 @@
       </header>
 
       <div class="panel">
-        <h3>Formatting / Formulas</h3>
-        <button id="run-cycle-number-format" class="action-btn">
-          Cycle Number Format (Selection)
-        </button>
-        <button id="run-cycle-date-format" class="action-btn">Cycle Date Format (Selection)</button>
-        <button id="run-cycle-cell-format" class="action-btn">Cycle Cell Format (Selection)</button>
-        <button id="run-cycle-text-style" class="action-btn">Cycle Text Style (Selection)</button>
-        <button id="run-auto-color" class="action-btn">Auto-color Numbers (Selection)</button>
-        <button id="run-switch-sign" class="action-btn">Switch Sign (Selection)</button>
-
-        <div class="row">
-          <label for="error-value">Error Wrap fallback</label>
-          <input id="error-value" type="text" value="NA()" />
-        </div>
-        <button id="run-error-wrap" class="action-btn">Error Wrap (Selection)</button>
-        <button id="run-smart-fill-right" class="action-btn">Smart Fill Right (Active Cell)</button>
-        <button id="run-formula-consistency" class="action-btn">
-          Formula Consistency (Selection)
-        </button>
+        <h3>Ribbon-first workflow</h3>
+        <p>
+          Run day-to-day XLerate actions from the <strong>XLerate</strong> ribbon tab or add them
+          to Excel's Quick Access Toolbar. The task pane is reserved for settings and the CAGR
+          calculator so the same worksheet action does not have duplicate trigger paths.
+        </p>
       </div>
 
       <div class="panel">
@@ -56,46 +43,8 @@
       </div>
 
       <div class="panel">
-        <h3>Trace</h3>
-        <p>Trace direct precedents/dependents recursively from the active cell.</p>
-        <div class="row">
-          <label for="trace-max-depth">Max depth (1-20)</label>
-          <input id="trace-max-depth" type="number" min="1" max="20" value="10" />
-        </div>
-        <button id="run-trace-precedents" class="action-btn">Trace Precedents (Active Cell)</button>
-        <button id="run-trace-dependents" class="action-btn">Trace Dependents (Active Cell)</button>
-        <button id="run-trace-dialog-precedents" class="action-btn secondary-btn">
-          Trace Precedents (Dialog)
-        </button>
-        <button id="run-trace-dialog-dependents" class="action-btn secondary-btn">
-          Trace Dependents (Dialog)
-        </button>
-        <div class="trace-table-wrap">
-          <table class="trace-table">
-            <thead>
-              <tr>
-                <th>Level</th>
-                <th>Address</th>
-                <th>Value</th>
-                <th>Formula</th>
-              </tr>
-            </thead>
-            <tbody
-              id="trace-results-body"
-              role="listbox"
-              aria-label="Trace results (use arrow keys to navigate, Enter to go to cell, Esc to exit list)"
-            >
-              <tr>
-                <td colspan="4">No trace results.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="panel">
         <h3>Format Settings</h3>
-        <p>Edit JSON for number/date/cell/text presets used by cycle actions.</p>
+        <p>Edit JSON for number/date/cell/text presets used by the ribbon actions.</p>
         <div class="row">
           <label for="format-settings-json">Settings JSON</label>
           <textarea id="format-settings-json" class="mono-input" rows="14"></textarea>

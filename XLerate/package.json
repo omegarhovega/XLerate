@@ -30,7 +30,7 @@
     "typecheck:harness": "tsc -p tsconfig.harness.json --noEmit",
     "arch:check": "depcruise --config .dependency-cruiser.cjs src",
     "lint:harness": "eslint src/adapters src/services tests/excelPortFake.spec.ts tests/switchSign.contract.spec.ts",
-    "ci:all": "npm run typecheck:core && npm run typecheck:harness && npm run lint:harness && npm run arch:check && npm run test:core && npm run build:dev",
+    "ci:all": "npm run typecheck:core && npm run typecheck:harness && npm run lint:harness && npm run arch:check && npm run test:core && npm run validate && npm run build",
     "start:wsl": "webpack serve --mode development",
     "stop:wsl": "sh -c 'fuser -k 3000/tcp 2>/dev/null || true'",
     "start:web:manual": "webpack serve --mode development",

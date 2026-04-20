@@ -5,31 +5,14 @@ the current branch. It should describe repo reality, not ideal future state.
 
 ## Build and integration
 
-- Production builds still rewrite manifest URLs to `https://www.contoso.com/`.
-  `webpack.config.js` needs a real production host or environment-driven
-  configuration before `dist/manifest.xml` is releaseable.
-
-- `npm run ci:all` is not yet the full integration gate described in older
-  docs and review notes. It currently runs `typecheck:core`,
-  `typecheck:harness`, `lint:harness`, `arch:check`, `test:core`, and
-  `build:dev`; it does not include full lint, manifest validation, or a
-  production build.
-
 - `manifest.xml` still under-declares the true host/runtime floor. Shared
   runtime behavior in practice needs newer Desktop builds than the manifest
   currently communicates to tooling.
 
 ## Product behavior
 
-- Text-style cycle state is still persisted via `localStorage`, so it survives
-  workbook close/reopen on the same origin instead of resetting to session-only
-  state.
-
 - The spec-defined keyboard shortcuts are not fully represented in the
   manifest/runtime yet.
-
-- The taskpane trace surface is still the older flat/eager rendering path,
-  while the dialog uses the newer tree/progressive interaction model.
 
 ## Platform limitations
 
@@ -54,3 +37,15 @@ the current branch. It should describe repo reality, not ideal future state.
 
 - Trace defaults now match the functional spec baseline (depth `10`, safety
   limit `500`).
+
+- Text-style cycle state is back to session-only module state instead of
+  `localStorage` persistence.
+
+- The task pane no longer duplicates ribbon-first worksheet action buttons.
+
+- Production builds now default to the GitHub Pages host instead of the
+  Contoso placeholder URL.
+
+- `ci:all` now includes full lint, manifest validation, and the production
+  build artifacts that matter for release readiness, while keeping lint scoped
+  to the harness-checked paths by design.

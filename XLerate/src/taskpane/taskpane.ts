@@ -50,13 +50,11 @@ const BORDER_SIDE_ITEMS = [
 ] as const;
 type BorderSideItem = (typeof BORDER_SIDE_ITEMS)[number];
 
-// Text-style cycle index lives in src/taskpane/cycleStateStorage.ts
-// (window.localStorage under a versioned key) so the ribbon button's
-// commands runtime and the taskpane stay in sync. Saving via
-// Office.context.document.settings.saveAsync would break the Excel
-// undo chain on Desktop; localStorage is session-scoped and doesn't
-// touch the workbook. Cell-format / date-format / number-format
-// cycles infer position from the current cell and need no index.
+// Text-style cycle index lives in src/taskpane/cycleStateStorage.ts as
+// session-only module state. Shared runtime means ribbon handlers and the
+// taskpane see the same value without persisting anything to the workbook
+// or localStorage. Cell/date/number cycles infer position from the cell
+// itself and need no explicit index.
 
 function setStatus(message: string): void {
   const target = document.getElementById("status-text");

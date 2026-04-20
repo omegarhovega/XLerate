@@ -52,7 +52,8 @@ exception shrinks.
 `npm run ci:all` (inside `XLerate/`) is the single command that tells you
 whether a change is safe. It currently runs: `typecheck:core` →
 `typecheck:harness` → `lint:harness` → `arch:check` → `test:core` →
-`build:dev`. Every task you complete should end with a green `ci:all`.
+manifest `validate` → production `build`. Every task you complete should
+end with a green `ci:all`.
 
 Individual stages:
 - `npm run typecheck:core` — strict tsc against `src/core` and `tests`
@@ -60,11 +61,11 @@ Individual stages:
 - `npm run lint:harness` — ESLint scoped to the harness-checked adapter/service paths
 - `npm run arch:check` — dependency-cruiser
 - `npm run test:core` — Vitest run
-- `npm run build:dev` — webpack development build
+- `npm run validate` — manifest validation
+- `npm run build` — webpack production build
 
-`open-issues.md` tracks the currently-known gap between this practical
-gate and the stricter full integration gate we eventually want
-(`lint`, manifest validation, production build).
+`open-issues.md` tracks the remaining issues that sit outside this
+intentional gate.
 
 ## When making a change
 
