@@ -11,6 +11,14 @@ the current branch. It should describe repo reality, not ideal future state.
 
 ## Product behavior
 
+- The settings editor is still a raw JSON editor. It should be replaced with
+  a professional Excel-like settings UI (forms, reorderable lists, labeled
+  controls) rather than exposing raw JSON to end users.
+
+- CAGR is still exposed as a taskpane calculator. The desired product shape is
+  an in-sheet action/function that derives its numeric input range from cells
+  adjacent to the active cell and writes the CAGR result into the selected cell.
+
 - The spec-defined keyboard shortcuts are not fully represented in the
   manifest/runtime yet.
 
