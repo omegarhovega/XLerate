@@ -1,7 +1,7 @@
 # XLerate
 
 
-![XLerate](./docs/images/XLerate.png)
+![XLerate](https://raw.githubusercontent.com/omegarhovega/XLerate/master/docs/images/XLerate.png)
 
 XLerate is an Excel add-in for financial modeling work. It adds a dedicated **XLerate** ribbon tab with tools for tracing formulas, checking horizontal consistency, cycling through modeling formats, speeding up fill actions, and managing workbook-specific XLerate settings.
 
