@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>XLerate</title>
+    <style>
+      :root {
+        --canvas: #f7f5f0;
+        --surface: #ffffff;
+        --text: #1f1f1b;
+        --muted: #6f6a64;
+        --accent: #137c3f;
+        --accent-soft: #e7f5ec;
+        --border: #dde6de;
+        --shadow: 0 18px 44px rgba(28, 25, 23, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top right, rgba(19, 124, 63, 0.08), transparent 25%),
+          linear-gradient(180deg, #fbfbf9 0%, var(--canvas) 100%);
+      }
+
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 40px 20px 64px;
+      }
+
+      .hero,
+      .card {
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        box-shadow: var(--shadow);
+      }
+
+      .hero {
+        padding: 32px;
+      }
+
+      .eyebrow {
+        margin: 0;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 8px 0 12px;
+        font-size: 42px;
+        line-height: 1.05;
+      }
+
+      .lead {
+        margin: 0;
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.6;
+      }
+
+      .cta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      .button,
+      .button-secondary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 46px;
+        padding: 0 18px;
+        border-radius: 14px;
+        text-decoration: none;
+        font-weight: 700;
+      }
+
+      .button {
+        background: var(--accent);
+        color: #fff;
+      }
+
+      .button-secondary {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin-top: 20px;
+      }
+
+      .card {
+        padding: 20px;
+      }
+
+      .card h2 {
+        margin: 0 0 10px;
+        font-size: 20px;
+      }
+
+      .card p,
+      .card li {
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      .section-title {
+        margin: 28px 0 12px;
+        font-size: 24px;
+      }
+
+      .link-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .link-list a {
+        color: var(--accent);
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      .note {
+        margin-top: 18px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        background: #fff9e7;
+        color: #815400;
+        border: 1px solid #f0db9b;
+      }
+
+      code {
+        background: rgba(28, 25, 23, 0.06);
+        padding: 2px 6px;
+        border-radius: 8px;
+        font-family: Consolas, "Courier New", monospace;
+      }
+
+      @media (max-width: 760px) {
+        h1 {
+          font-size: 34px;
+        }
+
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">Excel Add-in</p>
+        <h1>XLerate</h1>
+        <p class="lead">
+          XLerate is an Excel add-in for financial modeling workflows, with fast ribbon tools for tracing formulas,
+          checking horizontal consistency, cycling through model formats, filling formulas, and managing workbook-specific presets.
+        </p>
+        <div class="cta-row">
+          <a class="button" href="./manifest.xml">Download Manifest</a>
+          <a class="button-secondary" href="https://github.com/omegarhovega/XLerate">View GitHub Repository</a>
+        </div>
+        <div class="note">
+          If you used the older VBA-based XLerate, this site hosts the newer Office.js version. The VBA version still
+          exists in the repository for reference, but the Office.js add-in is the current version.
+        </div>
+      </section>
+
+      <h2 class="section-title">Install</h2>
+      <div class="grid">
+        <section class="card">
+          <h2>Download</h2>
+          <p>Get the production add-in manifest:</p>
+          <div class="link-list">
+            <a href="./manifest.xml">manifest.xml</a>
+            <a href="./shortcuts.json">shortcuts.json</a>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Add to Excel</h2>
+          <ol>
+            <li>Download <code>manifest.xml</code>.</li>
+            <li>Open Excel Desktop.</li>
+            <li>Go to <strong>Insert</strong> → <strong>My Add-ins</strong>.</li>
+            <li>Use the custom add-in / upload manifest flow.</li>
+            <li>Select the downloaded manifest.</li>
+            <li>Open the <strong>XLerate</strong> ribbon tab.</li>
+          </ol>
+        </section>
+      </div>
+
+      <h2 class="section-title">Features</h2>
+      <div class="grid">
+        <section class="card">
+          <h2>Modeling tools</h2>
+          <ul>
+            <li>Switch Sign</li>
+            <li>Smart Fill Right</li>
+            <li>Insert CAGR</li>
+            <li>Horizontal Check</li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <h2>Formatting tools</h2>
+          <ul>
+            <li>Cycle Number / Date / Cell / Text formats</li>
+            <li>Auto-color values and formulas</li>
+            <li>Workbook-specific presets</li>
+            <li>Settings side pane for customization</li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <h2>Trace tools</h2>
+          <p>
+            Trace Precedents and Trace Dependents can inspect formula relationships across sheets and through multiple levels,
+            using a keyboard-friendly dialog.
+          </p>
+        </section>
+
+        <section class="card">
+          <h2>Shortcuts</h2>
+          <ul>
+            <li><code>Ctrl+Shift+1</code> — Cycle Number Formats</li>
+            <li><code>Ctrl+Shift+2</code> — Cycle Cell Formats</li>
+            <li><code>Ctrl+Shift+3</code> — Cycle Date Formats</li>
+            <li><code>Ctrl+Shift+4</code> — Cycle Text Styles</li>
+            <li><code>Ctrl+Shift+R</code> — Smart Fill Right</li>
+          </ul>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>
