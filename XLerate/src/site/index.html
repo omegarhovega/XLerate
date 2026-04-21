@@ -181,7 +181,7 @@
           checking horizontal consistency, cycling through model formats, filling formulas, and managing workbook-specific presets.
         </p>
         <div class="cta-row">
-          <a class="button" href="./manifest.xml">Download Manifest</a>
+          <a class="button" href="./manifest.xml" download="XLerate-manifest.xml">Download Manifest</a>
           <a class="button-secondary" href="https://github.com/omegarhovega/XLerate">View GitHub Repository</a>
         </div>
         <div class="note">
@@ -196,7 +196,7 @@
           <h2>Download</h2>
           <p>Get the production add-in manifest:</p>
           <div class="link-list">
-            <a href="./manifest.xml">manifest.xml</a>
+            <a href="./manifest.xml" download="XLerate-manifest.xml">manifest.xml</a>
             <a href="./shortcuts.json">shortcuts.json</a>
           </div>
         </section>
@@ -205,11 +205,20 @@
           <h2>Add to Excel</h2>
           <ol>
             <li>Download <code>manifest.xml</code>.</li>
-            <li>Open Excel Desktop.</li>
-            <li>Go to <strong>Insert</strong> → <strong>My Add-ins</strong>.</li>
-            <li>Use the custom add-in / upload manifest flow.</li>
-            <li>Select the downloaded manifest.</li>
-            <li>Open the <strong>XLerate</strong> ribbon tab.</li>
+            <li>
+              Put the manifest into a folder and share with yourself, or into a shared/network folder that will act as the add-in catalog.
+              For this see
+              <a href="https://learn.microsoft.com/en-us/office/dev/add-ins/testing/create-a-network-shared-folder-catalog-for-task-pane-and-content-add-ins">
+                Create a network shared folder catalog for task pane and content add-ins
+              </a>.
+            </li>
+            <li>In Excel, open <strong>Trust Center</strong> settings and add that shared folder as a trusted add-in catalog.</li>
+            <li>Restart Excel if required.</li>
+            <li>Go to <strong>Home</strong> → <strong>Add-ins</strong>.</li>
+            <li>Open <strong>+ More Add-ins</strong>.</li>
+            <li>Open the <strong>Shared Folder</strong> section.</li>
+            <li>Select XLerate from the shared-folder catalog.</li>
+            <li>The <strong>XLerate</strong> tab will open in the ribbon.</li>
           </ol>
         </section>
       </div>

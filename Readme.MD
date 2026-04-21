@@ -129,24 +129,20 @@ For Excel Desktop, the reliable installation path is via a **shared-folder add-i
 ### Shared-folder install flow
 
 1. Download `manifest.xml`.
-2. Put the manifest into a folder that you can share with yourself, or into a shared/network folder that will act as the add-in catalog.
+2. Put the manifest into a folder and share with yourself, or into a shared/network folder that will act as the add-in catalog. For this see [Create a network shared folder catalog for task pane and content add-ins](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/create-a-network-shared-folder-catalog-for-task-pane-and-content-add-ins)
 3. In Excel, open **Trust Center** settings and add that shared folder as a trusted add-in catalog.
 4. Restart Excel if required.
 5. Go to **Home** → **Add-ins**.
-6. Open **Manage My Add-ins**.
+6. Open **+ More Add-ins**.
 7. Open the **Shared Folder** section.
 8. Select XLerate from the shared-folder catalog.
-9. Open the **XLerate** tab in the ribbon.
+9. The **XLerate** tab will open in the ribbon.
 
 ### Important note
 
 The manifest is not installed by simply placing it in an arbitrary folder on your machine. Excel must be told to trust and use that folder as an add-in catalog through Trust Center settings.
 
 If Excel asks which action should own a shortcut such as `Ctrl+Shift+1`, choose **XLerate** for the XLerate actions you want.
-
-Microsoft reference:
-
-- [Create a network shared folder catalog for task pane and content add-ins](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/create-a-network-shared-folder-catalog-for-task-pane-and-content-add-ins)
 
 If you need to reset those choices later, use Excel’s search box and run:
 
