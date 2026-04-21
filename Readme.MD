@@ -115,30 +115,38 @@ Notes:
 
 ## Install
 
-### Option 1: Install from the hosted manifest
+### Get the Manifest
 
-Install using GitHub Pages:
+Download the manifest from one of these locations:
 
 - [manifest.xml](https://omegarhovega.github.io/XLerate/manifest.xml)
-
-### Option 2: Download the manifest from the repository
-
-If you prefer downloading from GitHub directly, use:
-
 - [XLerate/manifest.xml](./XLerate/manifest.xml)
 
 ## How to Install in Excel
 
-The exact menu wording varies slightly by Excel build, but the process is:
+For Excel Desktop, the reliable installation path is via a **shared-folder add-in catalog**.
+
+### Shared-folder install flow
 
 1. Download `manifest.xml`.
-2. Open Excel.
-3. Go to **Insert** → **My Add-ins**.
-4. Open the add-in management/upload flow for a custom add-in manifest.
-5. Upload or sideload the downloaded `manifest.xml`.
-6. Open the **XLerate** tab in the ribbon.
+2. Put the manifest into a folder that you can share with yourself, or into a shared/network folder that will act as the add-in catalog.
+3. In Excel, open **Trust Center** settings and add that shared folder as a trusted add-in catalog.
+4. Restart Excel if required.
+5. Go to **Home** → **Add-ins**.
+6. Open **Manage My Add-ins**.
+7. Open the **Shared Folder** section.
+8. Select XLerate from the shared-folder catalog.
+9. Open the **XLerate** tab in the ribbon.
+
+### Important note
+
+The manifest is not installed by simply placing it in an arbitrary folder on your machine. Excel must be told to trust and use that folder as an add-in catalog through Trust Center settings.
 
 If Excel asks which action should own a shortcut such as `Ctrl+Shift+1`, choose **XLerate** for the XLerate actions you want.
+
+Microsoft reference:
+
+- [Create a network shared folder catalog for task pane and content add-ins](https://learn.microsoft.com/en-us/office/dev/add-ins/testing/create-a-network-shared-folder-catalog-for-task-pane-and-content-add-ins)
 
 If you need to reset those choices later, use Excel’s search box and run:
 
