@@ -245,9 +245,3 @@ That runs:
 For changes that touch live Excel runtime boundaries or manifest/ribbon wiring, also use:
 
 - [sideload-checklist.md](./sideload-checklist.md)
-
-## Contributing
-
-- Read [CLAUDE.md](./CLAUDE.md)
-- Use the functional spec in `specs/2026-04-17-xlerate-functional-spec.md` as the behavior source of truth
-- Add or update tests where practical
