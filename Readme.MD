@@ -1,5 +1,8 @@
 # XLerate
 
+
+![XLerate](./docs/images/xlerate.png)
+
 XLerate is an Excel add-in for financial modeling work. It adds a dedicated **XLerate** ribbon tab with tools for tracing formulas, checking horizontal consistency, cycling through modeling formats, speeding up fill actions, and managing workbook-specific XLerate settings.
 
 If you used the older XLerate VBA-based add-in, this repository now ships the **new Office.js-based version** . The older VBA implementation is still present in the repo for reference but should be treated as legacy.
