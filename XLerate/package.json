@@ -1,9 +1,10 @@
 {
-  "name": "office-addin-taskpane",
-  "version": "0.0.1",
+  "name": "xlerate",
+  "version": "1.0.0",
+  "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/OfficeDev/Office-Addin-TaskPane.git"
+    "url": "https://github.com/omegarhovega/XLerate.git"
   },
   "license": "MIT",
   "config": {
@@ -20,9 +21,11 @@
     "prettier": "office-addin-lint prettier",
     "signin": "office-addin-dev-settings m365-account login",
     "signout": "office-addin-dev-settings m365-account logout",
-    "start": "office-addin-debugging start manifest.xml",
-    "stop": "office-addin-debugging stop manifest.xml",
+    "start": "office-addin-debugging start manifest.dev.xml",
+    "stop": "office-addin-debugging stop manifest.dev.xml",
     "validate": "office-addin-manifest validate manifest.xml",
+    "validate:dev": "office-addin-manifest validate manifest.dev.xml",
+    "validate:all": "npm run validate && npm run validate:dev",
     "watch": "webpack --mode development --watch",
     "test:core": "vitest run",
     "test:core:watch": "vitest",
@@ -30,7 +33,7 @@
     "typecheck:harness": "tsc -p tsconfig.harness.json --noEmit",
     "arch:check": "depcruise --config .dependency-cruiser.cjs src",
     "lint:harness": "eslint src/adapters src/services tests/excelPortFake.spec.ts tests/switchSign.contract.spec.ts",
-    "ci:all": "npm run typecheck:core && npm run typecheck:harness && npm run lint:harness && npm run arch:check && npm run test:core && npm run validate && npm run build",
+    "ci:all": "npm run typecheck:core && npm run typecheck:harness && npm run lint:harness && npm run arch:check && npm run test:core && npm run validate:all && npm run build",
     "start:wsl": "webpack serve --mode development",
     "stop:wsl": "sh -c 'fuser -k 3000/tcp 2>/dev/null || true'",
     "start:web:manual": "webpack serve --mode development",

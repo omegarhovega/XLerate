@@ -19,15 +19,29 @@ See [open-issues.md](./open-issues.md) for the remaining known gaps.
 
 Recommended / intended environment:
 
-- Excel Desktop on Windows
-- Modern Excel Desktop builds with shared runtime support
-- Best trace focus behavior on Desktop hosts that support `ExcelApiDesktop 1.1` (`Workbook.focus()`)
+- Excel on Windows, Mac, or the web
+- Modern Excel builds that satisfy the add-in manifest requirements
+- Best overall behavior on builds with shared runtime, custom keyboard shortcut, and `Workbook.focus()` support
 
 Notes:
 
 - The add-in is hosted as a web app and loaded by manifest URL; it is **not** a standalone `.xlam` macro add-in.
-- Excel on the web and mobile are not the primary target for v1.
-- Some Desktop-only behavior, especially trace focus return, depends on APIs that are not available on every host.
+- The shipped manifest is intentionally scoped to modern shared-runtime Excel hosts.
+- Excel Desktop on Windows and Mac are the primary target for v1.
+- Excel on the web is supported, but trace-dialog keyboard focus return is a desktop-only enhancement.
+- Excel mobile is out of scope for v1.
+
+## Install
+
+The release manifest is:
+
+- [`XLerate/manifest.xml`](./XLerate/manifest.xml)
+
+After GitHub Pages is live, the same manifest is also hosted at:
+
+- `https://omegarhovega.github.io/XLerate/manifest.xml`
+
+Users install XLerate by downloading the manifest and sideloading it in a supported Excel host.
 
 ## Distribution
 
@@ -35,11 +49,11 @@ Production hosting is designed around a static HTTPS site. The default productio
 
 - `https://omegarhovega.github.io/XLerate/`
 
-That means a practical distribution model is:
+That means the release flow is:
 
-1. Host the built add-in web assets on GitHub Pages.
-2. Distribute the Office add-in manifest that points to that hosted site.
-3. Users install the manifest by sideloading it or through a trusted add-in catalog/admin deployment path.
+1. Push to `master` or `main`.
+2. GitHub Actions deploys `XLerate/dist/` to GitHub Pages.
+3. Users install the release manifest that points at that hosted site.
 
 The web assets must be reachable over HTTPS for normal Office add-in use.
 
@@ -52,6 +66,8 @@ From the repo root:
 3. `npm run dev-server`
 4. In another terminal: `npm start`
 5. Open Excel Desktop and sideload the add-in
+
+`npm start` uses `manifest.dev.xml` for local sideloading. `manifest.xml` is the production manifest.
 
 ## Validation
 
@@ -66,7 +82,7 @@ It currently runs:
 - `lint:harness`
 - `arch:check`
 - `test:core`
-- manifest `validate`
+- production and local manifest `validate`
 - production `build`
 
 For anything touching `src/adapters/excelPortLive.ts` or taskpane handlers, also run the manual checklist in [sideload-checklist.md](./sideload-checklist.md).

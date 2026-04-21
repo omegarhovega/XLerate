@@ -15,7 +15,6 @@ import {
   endAutoColorProbeSession,
 } from "../adapters/autoColorProbe";
 import { computeNextDateFormat, hasMixedDateFormats } from "../core/dateFormatCycle";
-import { resolveFormatSettings, FORMAT_SETTINGS_KEY } from "../core/formatSettings";
 import { runAutoColor as runAutoColorService } from "../services/autoColor.service";
 import { runInsertCagr as runInsertCagrService } from "../services/cagr.service";
 import { runCycleCellFormat as runCycleCellFormatService } from "../services/cycleCellFormat.service";
@@ -24,6 +23,10 @@ import { runCycleNumberFormat as runCycleNumberFormatService } from "../services
 import { runCycleTextStyle as runCycleTextStyleService } from "../services/cycleTextStyle.service";
 import { runSwitchSign as runSwitchSignService } from "../services/switchSign.service";
 import { readTextStyleCycleIndex, writeTextStyleCycleIndex } from "./cycleStateStorage";
+import {
+  readWorkbookFormatSettings,
+  resetWorkbookFormatSettings,
+} from "./formatSettingsStore";
 import { openTraceDialog } from "./traceDialogLauncher";
 import {
   applyFormulaConsistencyAction,
@@ -63,21 +66,16 @@ async function finish(event: Office.AddinCommands.Event, work: () => Promise<voi
   }
 }
 
-function readFormatSettings(): ReturnType<typeof resolveFormatSettings> {
-  const raw = Office.context.document.settings.get(FORMAT_SETTINGS_KEY);
-  return resolveFormatSettings(raw);
-}
-
 async function runOpenTracePrecedentsDialog(event: Office.AddinCommands.Event): Promise<void> {
   await finish(event, () => {
-    const settings = readFormatSettings();
+    const settings = readWorkbookFormatSettings();
     return openTraceDialog("precedents", settings.trace);
   });
 }
 
 async function runOpenTraceDependentsDialog(event: Office.AddinCommands.Event): Promise<void> {
   await finish(event, () => {
-    const settings = readFormatSettings();
+    const settings = readWorkbookFormatSettings();
     return openTraceDialog("dependents", settings.trace);
   });
 }
@@ -100,14 +98,14 @@ async function runFormulaConsistencyFromRibbon(event: Office.AddinCommands.Event
 
 async function runCycleNumberFormatFromRibbon(event: Office.AddinCommands.Event): Promise<void> {
   await finish(event, () => {
-    const settings = readFormatSettings();
+    const settings = readWorkbookFormatSettings();
     return runCycleNumberFormatService(new ExcelPortLive(), settings.numberFormats);
   });
 }
 
 async function runCycleDateFormatFromRibbon(event: Office.AddinCommands.Event): Promise<void> {
   await finish(event, async () => {
-    const settings = readFormatSettings();
+    const settings = readWorkbookFormatSettings();
     const port = new ExcelPortLive();
     const before = await port.getSelectionFormatting();
     const beforeFormats = before.map((snap) => ({
@@ -146,14 +144,14 @@ async function runCycleDateFormatFromRibbon(event: Office.AddinCommands.Event): 
 
 async function runCycleCellFormatFromRibbon(event: Office.AddinCommands.Event): Promise<void> {
   await finish(event, () => {
-    const settings = readFormatSettings();
+    const settings = readWorkbookFormatSettings();
     return runCycleCellFormatService(new ExcelPortLive(), settings.cellFormats);
   });
 }
 
 async function runCycleTextStyleFromRibbon(event: Office.AddinCommands.Event): Promise<void> {
   await finish(event, async () => {
-    const settings = readFormatSettings();
+    const settings = readWorkbookFormatSettings();
     const { index } = await runCycleTextStyleService(
       new ExcelPortLive(),
       readTextStyleCycleIndex(),
@@ -169,7 +167,7 @@ async function runAutoColorFromRibbon(event: Office.AddinCommands.Event): Promis
   try {
     await finish(event, async () => {
       autoColorProbe("02 finish-inner-enter");
-      const settings = readFormatSettings();
+      const settings = readWorkbookFormatSettings();
       autoColorProbe("03 settings-read", {
         paletteKeys: Object.keys(settings.autoColorPalette ?? {}),
       });
@@ -192,6 +190,43 @@ async function runInsertCagrFromRibbon(event: Office.AddinCommands.Event): Promi
   await finish(event, () => runInsertCagrService(new ExcelPortLive()).then(() => undefined));
 }
 
+async function runResetFormatSettingsFromRibbon(event: Office.AddinCommands.Event): Promise<void> {
+  await finish(event, () => resetWorkbookFormatSettings());
+}
+
+async function cycleNumberFormatShortcut(): Promise<void> {
+  const settings = readWorkbookFormatSettings();
+  await runCycleNumberFormatService(new ExcelPortLive(), settings.numberFormats);
+}
+
+async function cycleCellFormatShortcut(): Promise<void> {
+  const settings = readWorkbookFormatSettings();
+  await runCycleCellFormatService(new ExcelPortLive(), settings.cellFormats);
+}
+
+async function cycleDateFormatShortcut(): Promise<void> {
+  const settings = readWorkbookFormatSettings();
+  await runCycleDateFormatService(new ExcelPortLive(), settings.dateFormats);
+}
+
+async function cycleTextStyleShortcut(): Promise<void> {
+  const settings = readWorkbookFormatSettings();
+  const { index } = await runCycleTextStyleService(
+    new ExcelPortLive(),
+    readTextStyleCycleIndex(),
+    settings.textStyles
+  );
+  writeTextStyleCycleIndex(index);
+}
+
+async function smartFillRightShortcut(): Promise<void> {
+  await applySmartFillRightAction();
+}
+
+async function resetFormatSettingsShortcut(): Promise<void> {
+  await resetWorkbookFormatSettings();
+}
+
 Office.actions.associate("openTracePrecedentsDialog", runOpenTracePrecedentsDialog);
 Office.actions.associate("openTraceDependentsDialog", runOpenTraceDependentsDialog);
 Office.actions.associate("runSwitchSign", runSwitchSignFromRibbon);
@@ -203,3 +238,10 @@ Office.actions.associate("runCycleCellFormat", runCycleCellFormatFromRibbon);
 Office.actions.associate("runCycleTextStyle", runCycleTextStyleFromRibbon);
 Office.actions.associate("runAutoColor", runAutoColorFromRibbon);
 Office.actions.associate("runInsertCagr", runInsertCagrFromRibbon);
+Office.actions.associate("resetFormatSettings", runResetFormatSettingsFromRibbon);
+Office.actions.associate("CycleNumberFormat", cycleNumberFormatShortcut);
+Office.actions.associate("CycleCellFormat", cycleCellFormatShortcut);
+Office.actions.associate("CycleDateFormat", cycleDateFormatShortcut);
+Office.actions.associate("CycleTextStyle", cycleTextStyleShortcut);
+Office.actions.associate("SmartFillRight", smartFillRightShortcut);
+Office.actions.associate("ResetFormatSettings", resetFormatSettingsShortcut);

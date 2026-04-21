@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0" xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="TaskPaneApp">
-  <Id>e3afbfd8-06fa-47f9-a862-bdc61ed6e9bf</Id>
+  <Id>8d69ec67-99da-4c49-8b67-01fd4cf431fd</Id>
   <Version>1.0.1.0</Version>
   <ProviderName>XLerate</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="XLerate"/>
   <Description DefaultValue="Excel add-in for financial modeling workflows, auditing, formatting cycles, and trace navigation."/>
-  <IconUrl DefaultValue="https://omegarhovega.github.io/XLerate/assets/icon-32.png"/>
-  <HighResolutionIconUrl DefaultValue="https://omegarhovega.github.io/XLerate/assets/icon-64.png"/>
+  <IconUrl DefaultValue="https://localhost:3000/assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>
   <SupportUrl DefaultValue="https://github.com/omegarhovega/XLerate/issues"/>
   <AppDomains>
     <AppDomain>https://omegarhovega.github.io</AppDomain>
@@ -16,7 +16,7 @@
     <Host Name="Workbook"/>
   </Hosts>
   <DefaultSettings>
-    <SourceLocation DefaultValue="https://omegarhovega.github.io/XLerate/taskpane.html"/>
+    <SourceLocation DefaultValue="https://localhost:3000/taskpane.html"/>
   </DefaultSettings>
   <Permissions>ReadWriteDocument</Permissions>
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
@@ -255,58 +255,58 @@
     </Hosts>
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon.16x16" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icon-16.png"/>
-        <bt:Image id="Icon.32x32" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icon-32.png"/>
-        <bt:Image id="Icon.80x80" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icon-80.png"/>
-        <bt:Image id="TracePrecIc.16x16" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/trace-precedents-16.png"/>
-        <bt:Image id="TracePrecIc.32x32" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/trace-precedents-32.png"/>
-        <bt:Image id="TracePrecIc.80x80" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/trace-precedents-80.png"/>
-        <bt:Image id="TraceDepIc.16x16" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/trace-dependents-16.png"/>
-        <bt:Image id="TraceDepIc.32x32" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/trace-dependents-32.png"/>
-        <bt:Image id="TraceDepIc.80x80" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/trace-dependents-80.png"/>
-        <bt:Image id="SwSignIc.16x16" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/switch-sign-16.png"/>
-        <bt:Image id="SwSignIc.32x32" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/switch-sign-32.png"/>
-        <bt:Image id="SwSignIc.80x80" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/switch-sign-80.png"/>
-        <bt:Image id="SmFillIc.16x16" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/smart-fill-16.png"/>
-        <bt:Image id="SmFillIc.32x32" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/smart-fill-32.png"/>
-        <bt:Image id="SmFillIc.80x80" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/smart-fill-80.png"/>
-        <bt:Image id="ConsIc.16x16" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/consistency-16.png"/>
-        <bt:Image id="ConsIc.32x32" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/consistency-32.png"/>
-        <bt:Image id="ConsIc.80x80" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/consistency-80.png"/>
-        <bt:Image id="CycNumIc.16x16" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/cycle-number-16.png"/>
-        <bt:Image id="CycNumIc.32x32" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/cycle-number-32.png"/>
-        <bt:Image id="CycNumIc.80x80" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/cycle-number-80.png"/>
-        <bt:Image id="CycDateIc.16x16" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/cycle-date-16.png"/>
-        <bt:Image id="CycDateIc.32x32" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/cycle-date-32.png"/>
-        <bt:Image id="CycDateIc.80x80" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/cycle-date-80.png"/>
-        <bt:Image id="CycCellIc.16x16" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/cycle-cell-16.png"/>
-        <bt:Image id="CycCellIc.32x32" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/cycle-cell-32.png"/>
-        <bt:Image id="CycCellIc.80x80" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/cycle-cell-80.png"/>
-        <bt:Image id="CycTextIc.16x16" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/cycle-text-16.png"/>
-        <bt:Image id="CycTextIc.32x32" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/cycle-text-32.png"/>
-        <bt:Image id="CycTextIc.80x80" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/cycle-text-80.png"/>
-        <bt:Image id="AutoClrIc.16x16" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/auto-color-16.png"/>
-        <bt:Image id="AutoClrIc.32x32" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/auto-color-32.png"/>
-        <bt:Image id="AutoClrIc.80x80" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/auto-color-80.png"/>
-        <bt:Image id="PaneIc.16x16" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/show-taskpane-16.png"/>
-        <bt:Image id="PaneIc.32x32" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/show-taskpane-32.png"/>
-        <bt:Image id="PaneIc.80x80" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/show-taskpane-80.png"/>
-        <bt:Image id="FmlGrpIc.16x16" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/group-formulas-16.png"/>
-        <bt:Image id="FmlGrpIc.32x32" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/group-formulas-32.png"/>
-        <bt:Image id="FmlGrpIc.80x80" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/group-formulas-80.png"/>
-        <bt:Image id="AudGrpIc.16x16" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/group-auditing-16.png"/>
-        <bt:Image id="AudGrpIc.32x32" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/group-auditing-32.png"/>
-        <bt:Image id="AudGrpIc.80x80" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/group-auditing-80.png"/>
-        <bt:Image id="FmtGrpIc.16x16" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/group-formatting-16.png"/>
-        <bt:Image id="FmtGrpIc.32x32" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/group-formatting-32.png"/>
-        <bt:Image id="FmtGrpIc.80x80" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/group-formatting-80.png"/>
-        <bt:Image id="SetGrpIc.16x16" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/group-settings-16.png"/>
-        <bt:Image id="SetGrpIc.32x32" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/group-settings-32.png"/>
-        <bt:Image id="SetGrpIc.80x80" DefaultValue="https://omegarhovega.github.io/XLerate/assets/icons/group-settings-80.png"/>
+        <bt:Image id="Icon.16x16" DefaultValue="https://localhost:3000/assets/icon-16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="https://localhost:3000/assets/icon-32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="https://localhost:3000/assets/icon-80.png"/>
+        <bt:Image id="TracePrecIc.16x16" DefaultValue="https://localhost:3000/assets/icons/trace-precedents-16.png"/>
+        <bt:Image id="TracePrecIc.32x32" DefaultValue="https://localhost:3000/assets/icons/trace-precedents-32.png"/>
+        <bt:Image id="TracePrecIc.80x80" DefaultValue="https://localhost:3000/assets/icons/trace-precedents-80.png"/>
+        <bt:Image id="TraceDepIc.16x16" DefaultValue="https://localhost:3000/assets/icons/trace-dependents-16.png"/>
+        <bt:Image id="TraceDepIc.32x32" DefaultValue="https://localhost:3000/assets/icons/trace-dependents-32.png"/>
+        <bt:Image id="TraceDepIc.80x80" DefaultValue="https://localhost:3000/assets/icons/trace-dependents-80.png"/>
+        <bt:Image id="SwSignIc.16x16" DefaultValue="https://localhost:3000/assets/icons/switch-sign-16.png"/>
+        <bt:Image id="SwSignIc.32x32" DefaultValue="https://localhost:3000/assets/icons/switch-sign-32.png"/>
+        <bt:Image id="SwSignIc.80x80" DefaultValue="https://localhost:3000/assets/icons/switch-sign-80.png"/>
+        <bt:Image id="SmFillIc.16x16" DefaultValue="https://localhost:3000/assets/icons/smart-fill-16.png"/>
+        <bt:Image id="SmFillIc.32x32" DefaultValue="https://localhost:3000/assets/icons/smart-fill-32.png"/>
+        <bt:Image id="SmFillIc.80x80" DefaultValue="https://localhost:3000/assets/icons/smart-fill-80.png"/>
+        <bt:Image id="ConsIc.16x16" DefaultValue="https://localhost:3000/assets/icons/consistency-16.png"/>
+        <bt:Image id="ConsIc.32x32" DefaultValue="https://localhost:3000/assets/icons/consistency-32.png"/>
+        <bt:Image id="ConsIc.80x80" DefaultValue="https://localhost:3000/assets/icons/consistency-80.png"/>
+        <bt:Image id="CycNumIc.16x16" DefaultValue="https://localhost:3000/assets/icons/cycle-number-16.png"/>
+        <bt:Image id="CycNumIc.32x32" DefaultValue="https://localhost:3000/assets/icons/cycle-number-32.png"/>
+        <bt:Image id="CycNumIc.80x80" DefaultValue="https://localhost:3000/assets/icons/cycle-number-80.png"/>
+        <bt:Image id="CycDateIc.16x16" DefaultValue="https://localhost:3000/assets/icons/cycle-date-16.png"/>
+        <bt:Image id="CycDateIc.32x32" DefaultValue="https://localhost:3000/assets/icons/cycle-date-32.png"/>
+        <bt:Image id="CycDateIc.80x80" DefaultValue="https://localhost:3000/assets/icons/cycle-date-80.png"/>
+        <bt:Image id="CycCellIc.16x16" DefaultValue="https://localhost:3000/assets/icons/cycle-cell-16.png"/>
+        <bt:Image id="CycCellIc.32x32" DefaultValue="https://localhost:3000/assets/icons/cycle-cell-32.png"/>
+        <bt:Image id="CycCellIc.80x80" DefaultValue="https://localhost:3000/assets/icons/cycle-cell-80.png"/>
+        <bt:Image id="CycTextIc.16x16" DefaultValue="https://localhost:3000/assets/icons/cycle-text-16.png"/>
+        <bt:Image id="CycTextIc.32x32" DefaultValue="https://localhost:3000/assets/icons/cycle-text-32.png"/>
+        <bt:Image id="CycTextIc.80x80" DefaultValue="https://localhost:3000/assets/icons/cycle-text-80.png"/>
+        <bt:Image id="AutoClrIc.16x16" DefaultValue="https://localhost:3000/assets/icons/auto-color-16.png"/>
+        <bt:Image id="AutoClrIc.32x32" DefaultValue="https://localhost:3000/assets/icons/auto-color-32.png"/>
+        <bt:Image id="AutoClrIc.80x80" DefaultValue="https://localhost:3000/assets/icons/auto-color-80.png"/>
+        <bt:Image id="PaneIc.16x16" DefaultValue="https://localhost:3000/assets/icons/show-taskpane-16.png"/>
+        <bt:Image id="PaneIc.32x32" DefaultValue="https://localhost:3000/assets/icons/show-taskpane-32.png"/>
+        <bt:Image id="PaneIc.80x80" DefaultValue="https://localhost:3000/assets/icons/show-taskpane-80.png"/>
+        <bt:Image id="FmlGrpIc.16x16" DefaultValue="https://localhost:3000/assets/icons/group-formulas-16.png"/>
+        <bt:Image id="FmlGrpIc.32x32" DefaultValue="https://localhost:3000/assets/icons/group-formulas-32.png"/>
+        <bt:Image id="FmlGrpIc.80x80" DefaultValue="https://localhost:3000/assets/icons/group-formulas-80.png"/>
+        <bt:Image id="AudGrpIc.16x16" DefaultValue="https://localhost:3000/assets/icons/group-auditing-16.png"/>
+        <bt:Image id="AudGrpIc.32x32" DefaultValue="https://localhost:3000/assets/icons/group-auditing-32.png"/>
+        <bt:Image id="AudGrpIc.80x80" DefaultValue="https://localhost:3000/assets/icons/group-auditing-80.png"/>
+        <bt:Image id="FmtGrpIc.16x16" DefaultValue="https://localhost:3000/assets/icons/group-formatting-16.png"/>
+        <bt:Image id="FmtGrpIc.32x32" DefaultValue="https://localhost:3000/assets/icons/group-formatting-32.png"/>
+        <bt:Image id="FmtGrpIc.80x80" DefaultValue="https://localhost:3000/assets/icons/group-formatting-80.png"/>
+        <bt:Image id="SetGrpIc.16x16" DefaultValue="https://localhost:3000/assets/icons/group-settings-16.png"/>
+        <bt:Image id="SetGrpIc.32x32" DefaultValue="https://localhost:3000/assets/icons/group-settings-32.png"/>
+        <bt:Image id="SetGrpIc.80x80" DefaultValue="https://localhost:3000/assets/icons/group-settings-80.png"/>
       </bt:Images>
       <bt:Urls>
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://github.com/omegarhovega/XLerate"/>
-        <bt:Url id="Taskpane.Url" DefaultValue="https://omegarhovega.github.io/XLerate/taskpane.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GetStarted.Title" DefaultValue="XLerate is ready"/>
@@ -345,5 +345,5 @@
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>
-  <ExtendedOverrides Url="https://omegarhovega.github.io/XLerate/shortcuts.json"/>
+  <ExtendedOverrides Url="https://localhost:3000/shortcuts.json"/>
 </OfficeApp>

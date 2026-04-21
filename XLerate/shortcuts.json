@@ -1,0 +1,72 @@
+{
+  "actions": [
+    {
+      "id": "CycleNumberFormat",
+      "type": "ExecuteFunction",
+      "name": "Cycle number formats"
+    },
+    {
+      "id": "CycleCellFormat",
+      "type": "ExecuteFunction",
+      "name": "Cycle cell formats"
+    },
+    {
+      "id": "CycleDateFormat",
+      "type": "ExecuteFunction",
+      "name": "Cycle date formats"
+    },
+    {
+      "id": "CycleTextStyle",
+      "type": "ExecuteFunction",
+      "name": "Cycle text styles"
+    },
+    {
+      "id": "SmartFillRight",
+      "type": "ExecuteFunction",
+      "name": "Smart Fill Right"
+    },
+    {
+      "id": "ResetFormatSettings",
+      "type": "ExecuteFunction",
+      "name": "Reset format settings"
+    }
+  ],
+  "shortcuts": [
+    {
+      "action": "CycleNumberFormat",
+      "key": {
+        "default": "Ctrl+Shift+1"
+      }
+    },
+    {
+      "action": "CycleCellFormat",
+      "key": {
+        "default": "Ctrl+Shift+2"
+      }
+    },
+    {
+      "action": "CycleDateFormat",
+      "key": {
+        "default": "Ctrl+Shift+3"
+      }
+    },
+    {
+      "action": "CycleTextStyle",
+      "key": {
+        "default": "Ctrl+Shift+4"
+      }
+    },
+    {
+      "action": "SmartFillRight",
+      "key": {
+        "default": "Ctrl+Shift+R"
+      }
+    },
+    {
+      "action": "ResetFormatSettings",
+      "key": {
+        "default": "Ctrl+Shift+0"
+      }
+    }
+  ]
+}

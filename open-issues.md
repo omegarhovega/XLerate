@@ -3,24 +3,30 @@
 This file tracks the highest-signal known gaps that are still open on top of
 the current branch. It should describe repo reality, not ideal future state.
 
-## Build and integration
+## Release readiness
 
-- `manifest.xml` still under-declares the true host/runtime floor. Shared
-  runtime behavior in practice needs newer Desktop builds than the manifest
-  currently communicates to tooling.
+- No ship blockers are currently tracked in this file.
 
-## Product behavior
+## Platform notes
 
-- The spec-defined keyboard shortcuts are not fully represented in the
-  manifest/runtime yet.
-
-## Platform limitations
-
-- Trace-dialog focus return now uses `Workbook.focus()` on Desktop
-  (`ExcelApiDesktop 1.1`). Equivalent focus restoration is still unresolved on
-  non-Desktop hosts where that API is unavailable.
+- Trace-dialog focus return uses `Workbook.focus()` when the host supports
+  it. Excel Desktop gets the best post-close keyboard handoff; Excel on the
+  web remains usable but does not have the same host-level focus restore.
 
 ## Recently fixed
+
+- `manifest.xml` now declares the desktop/runtime floor in the base manifest,
+  so unsupported hosts are filtered out before installation.
+
+- The checked-in production manifest now points at the GitHub Pages host, while
+  `manifest.dev.xml` remains the local sideload manifest for development.
+
+- GitHub Actions now deploy `XLerate/dist/` to GitHub Pages on pushes to
+  `master` / `main`, including the hosted production manifest and shortcut
+  manifest.
+
+- The spec-defined keyboard shortcuts are now represented through
+  `ExtendedOverrides` + `shortcuts.json`, including the reset-formats action.
 
 - Stale trace compute can no longer stream into a newly-opened dialog instance.
 

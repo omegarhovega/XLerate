@@ -3,13 +3,14 @@
 import "./ribbonActions";
 import { clearAutoColorProbeLog, readAutoColorProbeLog } from "../adapters/autoColorProbe";
 import {
-  buildDefaultFormatSettings,
-  FORMAT_SETTINGS_KEY,
   getFormatSettingsValidationError,
   resolveFormatSettings,
   type ResolvedFormatSettings,
 } from "../core/formatSettings";
-import { resetTextStyleCycleIndex } from "./cycleStateStorage";
+import {
+  readWorkbookFormatSettings,
+  saveWorkbookFormatSettings,
+} from "./formatSettingsStore";
 import { initSettingsWorkspace } from "./settingsWorkspace";
 
 const SETTINGS_FILE_NAME = "xlerate-settings.json";
@@ -65,27 +66,6 @@ function setStatus(message: string): void {
   if (target) {
     target.textContent = message;
   }
-}
-
-// Office.context.document.settings.saveAsync breaks the native Excel undo
-// chain on Desktop when used in the same click as cell mutations, but it is
-// the right persistence mechanism for settings-editor actions that only
-// modify workbook settings.
-function saveDocumentSettingsAsync(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    Office.context.document.settings.saveAsync((result) => {
-      if (result.status === Office.AsyncResultStatus.Succeeded) {
-        resolve();
-      } else {
-        reject(new Error(result.error.message));
-      }
-    });
-  });
-}
-
-function readResolvedFormatSettings(): ResolvedFormatSettings {
-  const raw = Office.context.document.settings.get(FORMAT_SETTINGS_KEY);
-  return resolveFormatSettings(raw);
 }
 
 function settingsFilePickerTypes(): FilePickerAcceptType[] {
@@ -188,17 +168,6 @@ async function exportSettingsToFile(settings: ResolvedFormatSettings): Promise<v
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-async function saveWorkbookSettings(settings: ResolvedFormatSettings): Promise<void> {
-  const defaults = buildDefaultFormatSettings();
-  if (JSON.stringify(settings) === JSON.stringify(defaults)) {
-    Office.context.document.settings.remove(FORMAT_SETTINGS_KEY);
-  } else {
-    Office.context.document.settings.set(FORMAT_SETTINGS_KEY, JSON.stringify(settings));
-  }
-  await saveDocumentSettingsAsync();
-  resetTextStyleCycleIndex();
-}
-
 function installAutoColorProbeHelpers(): void {
   const debugWindow = window as WindowWithAutoColorDebug;
   debugWindow.__xlerateDebug = {
@@ -213,7 +182,6 @@ function installAutoColorProbeHelpers(): void {
     },
   };
 }
-
 Office.onReady((info) => {
   if (info.host !== Office.HostType.Excel) {
     return;
@@ -227,10 +195,10 @@ Office.onReady((info) => {
   }
 
   initSettingsWorkspace({
-    initialSettings: readResolvedFormatSettings(),
+    initialSettings: readWorkbookFormatSettings(),
     loadSavedSettings: loadSettingsFromFile,
     exportSettings: exportSettingsToFile,
-    saveSettings: saveWorkbookSettings,
+    saveSettings: saveWorkbookFormatSettings,
     onStatus: setStatus,
   });
   installAutoColorProbeHelpers();

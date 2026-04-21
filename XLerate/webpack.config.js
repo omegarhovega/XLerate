@@ -4,9 +4,6 @@ const devCerts = require("office-addin-dev-certs");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 
-const urlDev = "https://localhost:3000/";
-const urlProd = process.env.XLERATE_PROD_URL || "https://omegarhovega.github.io/XLerate/";
-
 async function getHttpsOptions() {
   const httpsOptions = await devCerts.getHttpsServerOptions();
   return { ca: httpsOptions.ca, key: httpsOptions.key, cert: httpsOptions.cert };
@@ -68,15 +65,12 @@ module.exports = async (env, options) => {
             globOptions: { ignore: ["**/*.svg"] },
           },
           {
-            from: "manifest*.xml",
-            to: "[name]" + "[ext]",
-            transform(content) {
-              if (dev) {
-                return content;
-              } else {
-                return content.toString().replace(new RegExp(urlDev, "g"), urlProd);
-              }
-            },
+            from: "manifest.xml",
+            to: "manifest.xml",
+          },
+          {
+            from: "shortcuts.json",
+            to: "shortcuts.json",
           },
         ],
       }),
