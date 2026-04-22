@@ -357,9 +357,9 @@ export type OpenTraceDialogOptions = {
   maxDepth?: number;
   /** Hard cap on total rendered rows; sanitized via `sanitizeTraceSafetyLimit`. */
   safetyLimit?: number;
-  /** Dialog height in percent of screen (1-100). Defaults to 60. */
+  /** Dialog height in percent of screen (1-100). Defaults to 30. */
   height?: number;
-  /** Dialog width in percent of screen (1-100). Defaults to 40. */
+  /** Dialog width in percent of screen (1-100). Defaults to 20. */
   width?: number;
 };
 
@@ -393,8 +393,8 @@ export async function openTraceDialog(
   url.searchParams.set("direction", direction);
   url.searchParams.set("perfSession", String(tracePerfSession));
 
-  const height = typeof options.height === "number" ? options.height : 60;
-  const width = typeof options.width === "number" ? options.width : 40;
+  const height = typeof options.height === "number" ? options.height : 30;
+  const width = typeof options.width === "number" ? options.width : 20;
 
   return new Promise<void>((resolve) => {
     Office.context.ui.displayDialogAsync(
