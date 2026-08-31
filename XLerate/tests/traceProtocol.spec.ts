@@ -57,6 +57,19 @@ describe("trace dialog protocol", () => {
     ).toMatchObject({ action: "navigate", target: { kind: "table", tableName: "RevenueTable" } });
   });
 
+  it("preserves the Escape request to restore the root selection", () => {
+    expect(
+      parseDialogToParentMessage(
+        JSON.stringify({ action: "close", sessionId: "s1", restoreRoot: true })
+      )
+    ).toEqual({ action: "close", sessionId: "s1", restoreRoot: true });
+    expect(
+      parseDialogToParentMessage(
+        JSON.stringify({ action: "close", sessionId: "s1", restoreRoot: false })
+      )
+    ).toEqual({ action: "close", sessionId: "s1" });
+  });
+
   it("parses child deltas without accepting arbitrary rows", () => {
     const raw = JSON.stringify({
       action: "childrenLoaded",

@@ -297,9 +297,24 @@ when expanded. All Excel work is serialized through one priority scheduler.
       runs first after the current Office.js boundary.
 - [ ] Close the dialog during a load, then immediately open another trace. The
       old session sends no rows into the new dialog and performs no later levels.
-- [ ] Enter or Escape closes the dialog. On Excel Desktop with
-      ExcelApiDesktop 1.1, keyboard focus returns to the grid and the last
-      navigated cell remains selected.
+- [ ] Enter closes the dialog and preserves the last navigated cell. Escape
+      restores the original trace-root cell before closing. On Excel Desktop
+      with ExcelApiDesktop 1.1, keyboard focus returns to the grid.
+
+**Pinned formula context:**
+
+- [ ] The complete root formula remains pinned above the scrollable tree while
+      direct precedents are selected.
+- [ ] ArrowDown/ArrowUp navigation in the trace tree updates the pinned formula
+      highlight without adding duplicate navigation controls to the context bar.
+- [ ] Selecting an A1 cell or a cell inside an A1 range highlights the matching
+      token in the pinned formula. A formula with one named/table reference uses
+      that token as a safe best-effort highlight.
+- [ ] Expanding to a deeper level changes the pinned context to the nearest
+      formula-bearing parent. In dependents mode, the selected dependent's own
+      formula is shown and its parent relationship is highlighted.
+- [ ] The breadcrumb shows the root-to-selection path. Clicking an ancestor
+      focuses and navigates to that loaded trace row.
 
 **Clickable formula references:**
 

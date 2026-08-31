@@ -48,8 +48,73 @@
         margin-top: 6px;
         min-height: 14px;
       }
+      .trace-context-panel {
+        flex: 0 0 auto;
+        margin-bottom: 6px;
+        padding: 6px 8px;
+        border: 1px solid #cfd7df;
+        border-left: 4px solid #0563c1;
+        border-radius: 4px;
+        background: #f8fbff;
+      }
+      .trace-context-kicker {
+        display: block;
+        margin-bottom: 1px;
+        color: #5b6570;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .trace-breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-height: 16px;
+        margin: 0 0 3px;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      .trace-breadcrumb-button {
+        max-width: 180px;
+        padding: 0;
+        overflow: hidden;
+        border: 0;
+        color: #0563c1;
+        background: transparent;
+        font: inherit;
+        font-size: 10px;
+        text-decoration: underline;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .trace-breadcrumb-button[aria-current="location"] {
+        color: #333;
+        font-weight: 700;
+        text-decoration: none;
+        cursor: default;
+      }
+      .trace-breadcrumb-separator {
+        color: #8a949e;
+        font-size: 10px;
+      }
+      .trace-context-formula {
+        max-height: 60px;
+        padding: 5px 6px;
+        overflow: auto;
+        border: 1px solid #dce3ea;
+        border-radius: 3px;
+        background: #fff;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 11px;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
       .trace-table-wrap {
         flex: 1;
+        min-height: 120px;
         overflow: auto;
         border: 1px solid #e3e3e3;
         border-radius: 4px;
@@ -146,19 +211,50 @@
         outline: 1px solid #0563c1;
         outline-offset: 1px;
       }
+      .trace-formula-reference.trace-formula-reference-active {
+        padding: 1px 3px;
+        color: #6f3d00;
+        background: #ffe49a;
+        box-shadow: inset 0 0 0 1px #d28a00;
+        font-weight: 700;
+        text-decoration: none;
+      }
       .trace-formula-external {
         color: #007c91;
         text-decoration: underline dotted;
         text-underline-offset: 2px;
         cursor: help;
       }
+      @media (max-width: 520px) {
+        header {
+          align-items: stretch;
+          flex-direction: column;
+        }
+        #trace-dialog-hint {
+          line-height: 1.35;
+        }
+        .trace-context-formula {
+          max-height: 80px;
+        }
+      }
     </style>
   </head>
   <body>
     <header>
       <h1 id="trace-dialog-title">Trace</h1>
-      <span id="trace-dialog-hint">↑/↓ navigate · →/← expand/collapse · Enter or Esc to close</span>
+      <span id="trace-dialog-hint"
+        >↑/↓ navigate · →/← expand/collapse · Enter keep · Esc restore</span
+      >
     </header>
+    <section class="trace-context-panel" aria-label="Formula context">
+      <span class="trace-context-kicker">Formula context</span>
+      <nav
+        id="trace-context-breadcrumb"
+        class="trace-breadcrumb"
+        aria-label="Trace breadcrumb"
+      ></nav>
+      <div id="trace-context-formula" class="trace-context-formula">Loading formula…</div>
+    </section>
     <div class="trace-table-wrap">
       <table>
         <thead>
@@ -171,7 +267,7 @@
         <tbody
           id="trace-dialog-body"
           role="tree"
-          aria-label="Trace results (↑/↓ navigate, → expand, ← collapse, Enter/Esc close)"
+          aria-label="Trace results (↑/↓ navigate, → expand, ← collapse, Enter keeps selection, Escape restores root)"
         >
           <tr>
             <td colspan="3">Loading…</td>

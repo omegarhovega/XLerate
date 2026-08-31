@@ -82,6 +82,20 @@ function closeActiveDialog(): void {
   }
 }
 
+function restoreRootAndClose(dialog: Office.Dialog, sessionId: string): void {
+  const session = activeSession;
+  if (!session) {
+    closeActiveDialog();
+    return;
+  }
+  void traceScheduler
+    .enqueueNavigation("restore-root", () => session.restoreRootSelection())
+    .catch(() => undefined)
+    .finally(() => {
+      if (isCurrentSession(dialog, sessionId)) closeActiveDialog();
+    });
+}
+
 function sendToDialog(
   dialog: Office.Dialog,
   sessionId: string,
@@ -270,7 +284,8 @@ function handleDialogMessage(
     }
     return;
   }
-  closeActiveDialog();
+  if (message.restoreRoot === true) restoreRootAndClose(dialog, sessionId);
+  else closeActiveDialog();
 }
 
 export type OpenTraceDialogOptions = {

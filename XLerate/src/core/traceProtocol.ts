@@ -12,7 +12,7 @@ export type DialogToParentMessage =
       page: number;
     }
   | { action: "navigate"; sessionId: string; target: TraceTarget }
-  | { action: "close"; sessionId: string };
+  | { action: "close"; sessionId: string; restoreRoot?: boolean };
 
 export type ParentToDialogMessage =
   | {
@@ -181,7 +181,11 @@ export function parseDialogToParentMessage(raw: unknown): DialogToParentMessage 
     };
   }
   if (message.action === "close") {
-    return { action: "close", sessionId: message.sessionId };
+    return {
+      action: "close",
+      sessionId: message.sessionId,
+      ...(message.restoreRoot === true ? { restoreRoot: true } : {}),
+    };
   }
   return null;
 }

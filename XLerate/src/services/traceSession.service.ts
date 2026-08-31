@@ -50,6 +50,7 @@ export class TraceSessionService {
   private readonly childCache = new Map<string, TraceExpansionResult>();
   private readonly pageCache = new Map<string, TraceRangePageLoadResult>();
   private readonly inFlight = new Map<string, Promise<TraceExpansionResult>>();
+  private rootTarget: TraceTarget | null = null;
   private referenceSequence = 0;
   private cancelled = false;
 
@@ -84,6 +85,7 @@ export class TraceSessionService {
     this.assertActive();
     const rootData = await this.port.getRoot();
     this.assertActive();
+    this.rootTarget = { address: rootData.address };
     const root = this.placeCanonicalNode(rootData, null, 0) as TraceCellNode;
     const expansion = await this.expand(root.id);
     const updatedRoot = this.nodesById.get(root.id) as TraceCellNode;
@@ -204,6 +206,13 @@ export class TraceSessionService {
   async navigate(target: TraceTarget): Promise<void> {
     this.assertActive();
     await this.port.select(target);
+    this.assertActive();
+  }
+
+  async restoreRootSelection(): Promise<void> {
+    this.assertActive();
+    if (!this.rootTarget) return;
+    await this.port.select(this.rootTarget);
     this.assertActive();
   }
 

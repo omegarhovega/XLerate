@@ -9,12 +9,18 @@ import {
   type TraceDialogState,
 } from "../core/traceDialogState";
 import { tokenizeFormulaReferences } from "../core/formulaReferences";
+import {
+  buildTraceFormulaContext,
+  getHighlightedFormulaSegmentIndexes,
+} from "../core/traceFormulaContext";
 import { isTraceNodeExpandable, type TraceNode, type TraceTarget } from "../core/traceGraph";
 import { parseParentToDialogMessage, type DialogToParentMessage } from "../core/traceProtocol";
 
 const BODY_ID = "trace-dialog-body";
 const STATUS_ID = "trace-dialog-status";
 const TITLE_ID = "trace-dialog-title";
+const CONTEXT_BREADCRUMB_ID = "trace-context-breadcrumb";
+const CONTEXT_FORMULA_ID = "trace-context-formula";
 const ROW_ID_ATTR = "data-trace-node-id";
 const ROW_FOCUSED_CLASS = "trace-row-focused";
 
@@ -85,6 +91,7 @@ function focusNode(nodeId: string, announce = true, moveDomFocus = true): void {
   target.classList.add(ROW_FOCUSED_CLASS);
   target.setAttribute("aria-selected", "true");
   currentFocusId = nodeId;
+  renderTraceContext();
   if (moveDomFocus) {
     target.focus();
     target.scrollIntoView({ block: "nearest" });
@@ -102,16 +109,21 @@ function stopRowKeyboardForButton(button: HTMLButtonElement): void {
   });
 }
 
-function appendFormulaContent(formulaCell: HTMLTableCellElement, node: TraceNode): void {
+function appendFormulaContent(
+  formulaCell: HTMLElement,
+  node: TraceNode,
+  highlightedIndexes: ReadonlySet<number> = new Set()
+): void {
   if (node.kind === "range") {
     formulaCell.textContent = "Range summary";
     return;
   }
 
-  for (const segment of tokenizeFormulaReferences(node.formula, node.worksheetName)) {
+  const segments = tokenizeFormulaReferences(node.formula, node.worksheetName);
+  segments.forEach((segment, index) => {
     if (segment.kind === "text") {
       formulaCell.appendChild(document.createTextNode(segment.text));
-      continue;
+      return;
     }
     if (segment.kind === "external") {
       const external = document.createElement("span");
@@ -123,11 +135,15 @@ function appendFormulaContent(formulaCell: HTMLTableCellElement, node: TraceNode
         `External workbook reference ${segment.workbookName}, ${segment.worksheetName}!${segment.rangeAddress}. Navigation unavailable.`
       );
       formulaCell.appendChild(external);
-      continue;
+      return;
     }
     const reference = document.createElement("button");
     reference.type = "button";
     reference.className = "trace-formula-reference";
+    if (highlightedIndexes.has(index)) {
+      reference.classList.add("trace-formula-reference-active");
+      reference.setAttribute("aria-current", "true");
+    }
     reference.textContent = segment.text;
     const targetDescription = describeTraceTarget(segment.target);
     reference.title = `Go to ${targetDescription}`;
@@ -138,6 +154,66 @@ function appendFormulaContent(formulaCell: HTMLTableCellElement, node: TraceNode
     });
     stopRowKeyboardForButton(reference);
     formulaCell.appendChild(reference);
+  });
+}
+
+function renderTraceBreadcrumb(contextNodeId: string): void {
+  const container = document.getElementById(CONTEXT_BREADCRUMB_ID);
+  if (!container) return;
+  container.textContent = "";
+  const context = buildTraceFormulaContext(state, contextNodeId, direction);
+  if (!context) return;
+
+  context.breadcrumb.forEach((node, index) => {
+    if (index > 0) {
+      const separator = document.createElement("span");
+      separator.className = "trace-breadcrumb-separator";
+      separator.textContent = "›";
+      separator.setAttribute("aria-hidden", "true");
+      container.appendChild(separator);
+    }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "trace-breadcrumb-button";
+    button.textContent = node.address;
+    button.title = `Go to ${node.address}`;
+    const isCurrent = node.id === contextNodeId;
+    if (isCurrent) {
+      button.setAttribute("aria-current", "location");
+      button.disabled = true;
+    } else {
+      button.addEventListener("click", () => focusNode(node.id));
+    }
+    stopRowKeyboardForButton(button);
+    container.appendChild(button);
+  });
+}
+
+function renderTraceContext(): void {
+  if (!currentFocusId) return;
+  const context = buildTraceFormulaContext(state, currentFocusId, direction);
+  if (!context) return;
+
+  renderTraceBreadcrumb(currentFocusId);
+
+  const formula = document.getElementById(CONTEXT_FORMULA_ID);
+  if (formula) {
+    formula.textContent = "";
+    if (context.formulaNode.kind === "range") {
+      formula.textContent = "Expand this summarized range to inspect an individual formula.";
+    } else if (context.formulaNode.formula.length === 0) {
+      formula.textContent = "This cell does not contain a formula.";
+    } else {
+      const segments = tokenizeFormulaReferences(
+        context.formulaNode.formula,
+        context.formulaNode.worksheetName
+      );
+      appendFormulaContent(
+        formula,
+        context.formulaNode,
+        getHighlightedFormulaSegmentIndexes(segments, context.relationNode)
+      );
+    }
   }
 }
 
@@ -248,7 +324,7 @@ function createTreeRow(node: TraceNode): HTMLTableRowElement {
   }
 
   row.append(addressCell, valueCell, formulaCell);
-  row.addEventListener("click", () => navigate(node));
+  row.addEventListener("click", () => focusNode(node.id));
   return row;
 }
 
@@ -363,9 +439,15 @@ function handleDialogKeydown(event: KeyboardEvent): void {
     return;
   }
 
-  if (event.key === "Enter" || event.key === "Escape") {
+  if (event.key === "Enter") {
     event.preventDefault();
     sendToParent({ action: "close", sessionId });
+    return;
+  }
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    sendToParent({ action: "close", sessionId, restoreRoot: true });
   }
 }
 
@@ -421,9 +503,9 @@ Office.onReady((info) => {
   setDialogTitle(`Trace ${direction}`);
   const body = document.getElementById(BODY_ID);
   if (body instanceof HTMLTableSectionElement) {
-    body.addEventListener("keydown", handleDialogKeydown);
     body.addEventListener("focusin", handleDialogFocusIn);
   }
+  document.addEventListener("keydown", handleDialogKeydown);
   renderTree();
   Office.context.ui.addHandlerAsync(
     Office.EventType.DialogParentMessageReceived,

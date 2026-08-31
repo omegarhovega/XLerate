@@ -18,5 +18,11 @@ Source logic: `src/modules/TraceUtils.bas`, `src/modules/RibbonCallbacks.bas`
    `Sheet!Name` token resolves only through that worksheet's named items.
    String literals remain text; external workbook cells/ranges are identified
    but non-clickable. Current-row table, 3D, and external-name references remain text.
-9. If no direct references exist, output includes only the root cell.
+9. A compact pinned context panel shows the relevant complete formula and its
+   root-to-node breadcrumb while the trace tree remains the navigation control.
+   Supported A1 cells/ranges are highlighted in place without additional Excel
+   reads during navigation.
 10. Selecting a result row jumps to and selects the referenced worksheet/range.
+11. Enter closes and keeps the current selection; Escape restores the original
+    trace-root cell before closing.
+12. If no direct references exist, output includes only the root cell.

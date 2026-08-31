@@ -248,4 +248,16 @@ describe("TraceSessionService", () => {
       },
     ]);
   });
+
+  it("restores the original root selection when requested", async () => {
+    const port = new TracePortFake(cell("root"));
+    port.setNeighbors("root", []);
+    const service = new TraceSessionService(port, "precedents", buildTraceLoadingPolicy());
+    const opened = await service.open();
+
+    await service.navigate({ address: "Other!B2" });
+    await service.restoreRootSelection();
+
+    expect(port.selections).toEqual([{ address: "Other!B2" }, { address: opened.root.address }]);
+  });
 });
