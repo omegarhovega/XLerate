@@ -9,7 +9,7 @@ import {
   type TraceDialogState,
 } from "../core/traceDialogState";
 import { tokenizeFormulaReferences } from "../core/formulaReferences";
-import { isTraceNodeExpandable, type TraceNode } from "../core/traceGraph";
+import { isTraceNodeExpandable, type TraceNode, type TraceTarget } from "../core/traceGraph";
 import { parseParentToDialogMessage, type DialogToParentMessage } from "../core/traceProtocol";
 
 const BODY_ID = "trace-dialog-body";
@@ -52,15 +52,25 @@ function sendToParent(message: DialogToParentMessage): void {
 }
 
 function navigate(node: TraceNode): void {
-  navigateTarget(node.address);
+  navigateTarget({ address: node.address });
 }
 
-function navigateTarget(address: string): void {
+function navigateTarget(target: TraceTarget): void {
   sendToParent({
     action: "navigate",
     sessionId,
-    target: { address },
+    target,
   });
+}
+
+function describeTraceTarget(target: TraceTarget): string {
+  if ("address" in target) return target.address;
+  if (target.kind === "namedRange") {
+    return target.worksheetName
+      ? `named range ${target.worksheetName}!${target.name}`
+      : `named range ${target.name}`;
+  }
+  return `table ${target.tableName}`;
 }
 
 function focusNode(nodeId: string, announce = true, moveDomFocus = true): void {
@@ -103,15 +113,28 @@ function appendFormulaContent(formulaCell: HTMLTableCellElement, node: TraceNode
       formulaCell.appendChild(document.createTextNode(segment.text));
       continue;
     }
+    if (segment.kind === "external") {
+      const external = document.createElement("span");
+      external.className = "trace-formula-external";
+      external.textContent = segment.text;
+      external.title = `${segment.reason} Target: [${segment.workbookName}]${segment.worksheetName}!${segment.rangeAddress}`;
+      external.setAttribute(
+        "aria-label",
+        `External workbook reference ${segment.workbookName}, ${segment.worksheetName}!${segment.rangeAddress}. Navigation unavailable.`
+      );
+      formulaCell.appendChild(external);
+      continue;
+    }
     const reference = document.createElement("button");
     reference.type = "button";
     reference.className = "trace-formula-reference";
     reference.textContent = segment.text;
-    reference.title = `Go to ${segment.target.address}`;
-    reference.setAttribute("aria-label", `Go to ${segment.target.address}`);
+    const targetDescription = describeTraceTarget(segment.target);
+    reference.title = `Go to ${targetDescription}`;
+    reference.setAttribute("aria-label", `Go to ${targetDescription}`);
     reference.addEventListener("click", (event) => {
       event.stopPropagation();
-      navigateTarget(segment.target.address);
+      navigateTarget(segment.target);
     });
     stopRowKeyboardForButton(reference);
     formulaCell.appendChild(reference);

@@ -43,6 +43,10 @@ Users can edit and save their own presets for:
   ranges stay summarized and can be opened in bounded pages.
 - A1-style cells, ranges, and sheet-qualified references shown inside formulas
   are clickable and navigate Excel without closing the trace dialog.
+- Workbook/worksheet named ranges and fully qualified Excel Table references
+  are also clickable. External workbook links are identified with an
+  explanatory non-clickable style because Office.js cannot select another
+  workbook's range.
 - Can inspect multiple dependency levels without scanning unrelated worksheets.
 - Best used on formula cells where you want to understand what feeds a number or what depends on it.
 

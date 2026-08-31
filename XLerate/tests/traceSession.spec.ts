@@ -219,4 +219,33 @@ describe("TraceSessionService", () => {
 
     await expect(pending).rejects.toThrow("Trace session was cancelled");
   });
+
+  it("passes named-range and table navigation targets through to the port", async () => {
+    const port = new TracePortFake(cell("a1"));
+    port.setNeighbors("a1", []);
+    const service = new TraceSessionService(port, "precedents", buildTraceLoadingPolicy());
+    await service.open();
+
+    await service.navigate({
+      kind: "namedRange",
+      name: "Revenue_Growth",
+      formulaWorksheetName: "Model",
+    });
+    await service.navigate({
+      kind: "table",
+      tableName: "RevenueTable",
+      section: "data",
+      columnStart: "Revenue",
+    });
+
+    expect(port.selections).toEqual([
+      { kind: "namedRange", name: "Revenue_Growth", formulaWorksheetName: "Model" },
+      {
+        kind: "table",
+        tableName: "RevenueTable",
+        section: "data",
+        columnStart: "Revenue",
+      },
+    ]);
+  });
 });

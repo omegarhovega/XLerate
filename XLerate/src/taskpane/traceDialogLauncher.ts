@@ -2,6 +2,7 @@
 
 import { TracePortLive, type TracePortMetric } from "../adapters/tracePortLive";
 import { buildTraceLoadingPolicy } from "../core/tracePolicy";
+import type { TraceTarget } from "../core/traceGraph";
 import { parseDialogToParentMessage, type ParentToDialogMessage } from "../core/traceProtocol";
 import {
   sanitizeTraceDepth,
@@ -119,6 +120,14 @@ function assertDirectionSupported(direction: TraceDirection): void {
       `Trace ${direction} requires ExcelApi ${minimumVersion} or later on this Excel host.`
     );
   }
+}
+
+function traceTargetKey(target: TraceTarget): string {
+  if ("address" in target) return target.address;
+  if (target.kind === "namedRange") {
+    return `name:${target.formulaWorksheetName}:${target.worksheetName ?? "workbook"}:${target.name}`;
+  }
+  return `table:${target.tableName}:${target.section}:${target.columnStart ?? ""}:${target.columnEnd ?? ""}`;
 }
 
 function queuePrefetch(
@@ -256,7 +265,7 @@ function handleDialogMessage(
     const session = activeSession;
     if (session) {
       void traceScheduler
-        .enqueueNavigation(message.target.address, () => session.navigate(message.target))
+        .enqueueNavigation(traceTargetKey(message.target), () => session.navigate(message.target))
         .catch(() => undefined);
     }
     return;

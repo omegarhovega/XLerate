@@ -23,6 +23,11 @@ the current branch. It should describe repo reality, not ideal future state.
 - Trace formulas now expose clickable local and sheet-qualified A1 cells/ranges,
   including absolute references, quoted worksheet names, and escaped apostrophes.
 
+- Formula navigation now also recognizes named ranges and fully qualified Excel
+  Table references. External workbook cells/ranges are identified with a
+  non-clickable explanatory state; cross-workbook selection remains unavailable
+  through the Excel JavaScript API.
+
 - `manifest.xml` now declares the desktop/runtime floor in the base manifest,
   so unsupported hosts are filtered out before installation.
 

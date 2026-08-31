@@ -311,8 +311,24 @@ when expanded. All Excel work is serialized through one priority scheduler.
 - [ ] Tab to a formula reference and press Enter. Navigation fires and the
       dialog remains open.
 - [ ] A reference-looking token inside an Excel string literal (for example
-      `="A1"`) remains plain text. Named ranges, table structured references,
-      3D references, and external workbook links are also plain text in v1.
+      `="A1"`) remains plain text.
+- [ ] Define both a workbook-scoped and worksheet-scoped named range. Each name
+      is clickable from a formula and selects its resolved range. A defined name
+      that resolves to a constant does not crash the dialog.
+- [ ] From `Summary`, trace `=Annual_volume_growth*100` where the workbook-scoped
+      name refers to a cell on `Global_Drivers`. The tooltip remains an
+      unqualified named range and clicking it selects the `Global_Drivers` cell.
+- [ ] Define a same-named worksheet-scoped item on `Summary`; the unqualified
+      token resolves to that local item, while `Global_Drivers!Annual_volume_growth`
+      resolves explicitly through the `Global_Drivers` worksheet scope.
+- [ ] Create an Excel Table and test `TableName[Column]`, `TableName[#All]`,
+      `TableName[#Data]`, `TableName[[#Headers],[Column]]`, and an adjacent
+      column span. Each supported token selects the corresponding table range.
+- [ ] Current-row structured references such as `[@Revenue]`, 3D references,
+      and unsupported structured syntax remain plain text.
+- [ ] An external cell/range reference is shown in the external-link style with
+      a tooltip naming its workbook, sheet, and range. It is not clickable and
+      does not imply that Office.js can switch workbooks.
 
 **Undo semantics:**
 

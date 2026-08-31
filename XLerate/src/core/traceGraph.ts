@@ -50,9 +50,31 @@ export type TraceReferenceNode = TraceNodePlacement & {
 
 export type TraceNode = TraceCellNode | TraceRangeNode | TraceReferenceNode;
 
-export type TraceTarget = {
+export type TraceAddressTarget = {
+  kind?: "address";
   address: string;
 };
+
+export type TraceNamedRangeTarget = {
+  kind: "namedRange";
+  name: string;
+  /** Worksheet containing the formula, used for Excel's local-name precedence. */
+  formulaWorksheetName: string;
+  /** Present only when the formula explicitly qualifies the name as Sheet!Name. */
+  worksheetName?: string;
+};
+
+export type TraceTableSection = "all" | "data" | "headers" | "totals";
+
+export type TraceTableTarget = {
+  kind: "table";
+  tableName: string;
+  section: TraceTableSection;
+  columnStart?: string;
+  columnEnd?: string;
+};
+
+export type TraceTarget = TraceAddressTarget | TraceNamedRangeTarget | TraceTableTarget;
 
 export type DirectNeighborResult = {
   nodes: TraceNodeData[];

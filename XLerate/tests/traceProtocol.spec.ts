@@ -20,6 +20,43 @@ describe("trace dialog protocol", () => {
     ).toBeNull();
   });
 
+  it("parses named-range and table navigation targets", () => {
+    expect(
+      parseDialogToParentMessage(
+        JSON.stringify({
+          action: "navigate",
+          sessionId: "s1",
+          target: {
+            kind: "namedRange",
+            name: "Revenue",
+            formulaWorksheetName: "Summary",
+          },
+        })
+      )
+    ).toMatchObject({
+      action: "navigate",
+      target: {
+        kind: "namedRange",
+        name: "Revenue",
+        formulaWorksheetName: "Summary",
+      },
+    });
+    expect(
+      parseDialogToParentMessage(
+        JSON.stringify({
+          action: "navigate",
+          sessionId: "s1",
+          target: {
+            kind: "table",
+            tableName: "RevenueTable",
+            section: "data",
+            columnStart: "Revenue",
+          },
+        })
+      )
+    ).toMatchObject({ action: "navigate", target: { kind: "table", tableName: "RevenueTable" } });
+  });
+
   it("parses child deltas without accepting arbitrary rows", () => {
     const raw = JSON.stringify({
       action: "childrenLoaded",

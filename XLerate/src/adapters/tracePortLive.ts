@@ -3,6 +3,8 @@ import type {
   TraceCellData,
   TraceRangeData,
   TraceRangePageResult,
+  TraceTableSection,
+  TraceTableTarget,
   TraceTarget,
 } from "../core/traceGraph";
 import {
@@ -60,6 +62,42 @@ function snapshotCell(
     value: formatTraceValue(scalarFromMatrix(values)),
     formula: formatTraceFormula(scalarFromMatrix(formulas)),
   };
+}
+
+function getTableRangeForSection(table: Excel.Table, section: TraceTableSection): Excel.Range {
+  if (section === "all") return table.getRange();
+  if (section === "headers") return table.getHeaderRowRange();
+  if (section === "totals") return table.getTotalRowRange();
+  return table.getDataBodyRange();
+}
+
+function getTableColumnRangeForSection(
+  column: Excel.TableColumn,
+  section: TraceTableSection
+): Excel.Range {
+  if (section === "all") return column.getRange();
+  if (section === "headers") return column.getHeaderRowRange();
+  if (section === "totals") return column.getTotalRowRange();
+  return column.getDataBodyRange();
+}
+
+function getStructuredTableRange(
+  context: Excel.RequestContext,
+  target: TraceTableTarget
+): Excel.Range {
+  const table = context.workbook.tables.getItem(target.tableName);
+  if (!target.columnStart) return getTableRangeForSection(table, target.section);
+
+  const start = getTableColumnRangeForSection(
+    table.columns.getItem(target.columnStart),
+    target.section
+  );
+  if (!target.columnEnd) return start;
+  const end = getTableColumnRangeForSection(
+    table.columns.getItem(target.columnEnd),
+    target.section
+  );
+  return start.getBoundingRect(end);
 }
 
 export class TracePortLive implements TracePort {
@@ -273,12 +311,35 @@ export class TracePortLive implements TracePort {
   }
 
   async select(target: TraceTarget): Promise<void> {
-    const parsed = parseWorksheetScopedAddress(target.address);
-    if (!parsed) return;
     let syncCount = 0;
     await Excel.run(async (context) => {
-      const worksheet = context.workbook.worksheets.getItem(parsed.worksheetName);
-      worksheet.getRanges(parsed.rangeAddress).select();
+      if ("address" in target) {
+        const parsed = parseWorksheetScopedAddress(target.address);
+        if (!parsed) return;
+        const worksheet = context.workbook.worksheets.getItem(parsed.worksheetName);
+        worksheet.getRanges(parsed.rangeAddress).select();
+      } else if (target.kind === "namedRange") {
+        if (target.worksheetName) {
+          const worksheet = context.workbook.worksheets.getItem(target.worksheetName);
+          worksheet.names.getItem(target.name).getRange().select();
+        } else {
+          const formulaWorksheet = context.workbook.worksheets.getItem(target.formulaWorksheetName);
+          const localName = formulaWorksheet.names.getItemOrNullObject(target.name);
+          const workbookName = context.workbook.names.getItemOrNullObject(target.name);
+          localName.load("name");
+          workbookName.load("name");
+          await context.sync();
+          syncCount += 1;
+
+          const resolvedName = localName.isNullObject ? workbookName : localName;
+          if (resolvedName.isNullObject) {
+            throw new Error(`Named range "${target.name}" was not found.`);
+          }
+          resolvedName.getRange().select();
+        }
+      } else {
+        getStructuredTableRange(context, target).select();
+      }
       await context.sync();
       syncCount += 1;
     });

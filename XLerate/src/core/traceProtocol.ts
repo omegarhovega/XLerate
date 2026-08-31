@@ -1,5 +1,5 @@
 import type { TraceDirection } from "./traceUtils";
-import type { TraceNode, TraceNodeLoadState, TraceTarget } from "./traceGraph";
+import type { TraceNode, TraceNodeLoadState, TraceTableSection, TraceTarget } from "./traceGraph";
 
 export type DialogToParentMessage =
   | { action: "ready"; sessionId: string }
@@ -96,6 +96,46 @@ function isNodeState(value: unknown): value is TraceNodeLoadState {
   );
 }
 
+function isTraceTableSection(value: unknown): value is TraceTableSection {
+  return value === "all" || value === "data" || value === "headers" || value === "totals";
+}
+
+function parseTraceTarget(value: unknown): TraceTarget | null {
+  if (!isRecord(value)) return null;
+  if (isNonEmptyString(value.address)) {
+    return { address: value.address };
+  }
+  if (
+    value.kind === "namedRange" &&
+    isNonEmptyString(value.name) &&
+    isNonEmptyString(value.formulaWorksheetName) &&
+    (value.worksheetName === undefined || isNonEmptyString(value.worksheetName))
+  ) {
+    return {
+      kind: "namedRange",
+      name: value.name,
+      formulaWorksheetName: value.formulaWorksheetName,
+      ...(isNonEmptyString(value.worksheetName) ? { worksheetName: value.worksheetName } : {}),
+    };
+  }
+  if (
+    value.kind === "table" &&
+    isNonEmptyString(value.tableName) &&
+    isTraceTableSection(value.section) &&
+    (value.columnStart === undefined || typeof value.columnStart === "string") &&
+    (value.columnEnd === undefined || typeof value.columnEnd === "string")
+  ) {
+    return {
+      kind: "table",
+      tableName: value.tableName,
+      section: value.section,
+      columnStart: isNonEmptyString(value.columnStart) ? value.columnStart : undefined,
+      columnEnd: isNonEmptyString(value.columnEnd) ? value.columnEnd : undefined,
+    };
+  }
+  return null;
+}
+
 export function parseDialogToParentMessage(raw: unknown): DialogToParentMessage | null {
   const message = parseRaw(raw);
   if (!message || !isNonEmptyString(message.sessionId)) return null;
@@ -131,15 +171,13 @@ export function parseDialogToParentMessage(raw: unknown): DialogToParentMessage 
       page: message.page,
     };
   }
-  if (
-    message.action === "navigate" &&
-    isRecord(message.target) &&
-    isNonEmptyString(message.target.address)
-  ) {
+  if (message.action === "navigate") {
+    const target = parseTraceTarget(message.target);
+    if (!target) return null;
     return {
       action: "navigate",
       sessionId: message.sessionId,
-      target: { address: message.target.address },
+      target,
     };
   }
   if (message.action === "close") {
