@@ -404,7 +404,9 @@ function parseEditorValue(
 }
 
 function syncDraftFromDom(root: HTMLDivElement, state: SettingsWorkspaceState): void {
-  const controls = root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+  const controls = root.querySelectorAll<
+    HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+  >(
     "[data-action='update-list-field'], [data-action='update-palette'], [data-action='update-trace']"
   );
 
@@ -704,7 +706,7 @@ function renderExpandablePresetList(state: SettingsWorkspaceState, tab: ListTabK
               return `
                 <div class="accordion-item${isOpen ? " accordion-item-open" : ""}">
                   <div class="accordion-item-row">
-                    <button type="button" class="accordion-item-button" data-action="select-item" data-index="${index}">
+                    <button type="button" class="accordion-item-button" data-action="select-item" data-index="${index}" aria-expanded="${isOpen}">
                       <span class="accordion-item-order">${index + 1}</span>
                       <span class="accordion-item-copy">
                         <span class="accordion-item-title">${title}</span>
@@ -741,17 +743,21 @@ function renderIndex(state: SettingsWorkspaceState): string {
   const groups: Array<"Formatting" | "Behavior"> = ["Formatting", "Behavior"];
 
   return `
-    <div class="settings-shell">
-      <section class="surface-card">
+    <div class="settings-shell settings-shell-home">
+      <header class="app-brand">
+        <span class="app-wordmark">XLerate</span>
+        <span class="app-brand-meta">Workbook tools</span>
+      </header>
+      <section class="settings-intro">
         <div class="settings-home-copy">
           <p class="section-kicker">Workbook</p>
           <h1>Settings</h1>
           <p class="section-copy">
-            Choose one settings area to edit. Each page focuses on a single part of the workbook configuration.
+            Choose an area to edit. Changes apply to this workbook after saving.
           </p>
         </div>
       </section>
-      <section class="surface-card settings-index-card">
+      <nav class="settings-index" aria-label="Settings areas">
         ${groups
           .map((group) => {
             const tabs = (Object.keys(TAB_META) as SettingsTabKey[]).filter(
@@ -759,13 +765,13 @@ function renderIndex(state: SettingsWorkspaceState): string {
             );
 
             return `
-              <div class="index-group">
-                <p class="index-group-label">${escapeHtml(group)}</p>
+              <section class="index-group" aria-labelledby="settings-group-${group.toLowerCase()}">
+                <h2 class="index-group-label" id="settings-group-${group.toLowerCase()}">${escapeHtml(group)}</h2>
                 <div class="index-link-list">
                   ${tabs
                     .map(
                       (tab) => `
-                        <button type="button" class="index-link" data-action="open-section" data-tab="${tab}">
+                        <button type="button" class="index-link" data-action="open-section" data-tab="${tab}" aria-label="Open ${escapeHtml(TAB_META[tab].title)}">
                           <span class="index-link-copy">
                             <span class="index-link-title">${escapeHtml(TAB_META[tab].title)}</span>
                           </span>
@@ -778,11 +784,11 @@ function renderIndex(state: SettingsWorkspaceState): string {
                     )
                     .join("")}
                 </div>
-              </div>
+              </section>
             `;
           })
           .join("")}
-      </section>
+      </nav>
     </div>
   `;
 }
@@ -792,30 +798,35 @@ function renderDetail(state: SettingsWorkspaceState, tab: SettingsTabKey): strin
   const validationError = getFormatSettingsValidationError(state.draft);
 
   return `
-    <div class="settings-shell">
-      <section class="surface-card detail-surface">
-        <div class="detail-topbar">
+    <div class="settings-shell settings-shell-detail">
+      <section class="detail-surface" aria-labelledby="settings-detail-title">
+        <div class="detail-shell-bar">
           <button type="button" class="back-button" data-action="go-home" aria-label="Back to settings">
             <span aria-hidden="true">&larr;</span>
           </button>
-          <div class="detail-topbar-copy">
-            <p class="section-kicker">Settings</p>
-            <h1>${escapeHtml(TAB_META[tab].title)}</h1>
-            <p class="section-copy">${escapeHtml(TAB_META[tab].description)}</p>
+          <strong>Workbook settings</strong>
+        </div>
+        <div class="detail-main">
+          <div class="detail-topbar">
+            <div class="detail-topbar-copy">
+              <p class="section-kicker">Settings</p>
+              <h1 id="settings-detail-title">${escapeHtml(TAB_META[tab].title)}</h1>
+              <p class="section-copy">${escapeHtml(TAB_META[tab].description)}</p>
+            </div>
           </div>
+          <div class="detail-toolbar">
+            <button type="button" class="secondary-btn" data-action="load-saved">Load Saved</button>
+            <button type="button" class="secondary-btn" data-action="export-settings">Export</button>
+            <button type="button" class="secondary-btn" data-action="restore-defaults">Restore Defaults</button>
+            <button type="button" class="primary-btn" data-action="save-settings" ${validationError ? "disabled" : ""}>Save Settings</button>
+          </div>
+          <div class="detail-meta" aria-label="Settings state">
+            <span class="state-pill ${dirty ? "dirty-pill" : "saved-pill"}">${dirty ? "Unsaved changes" : "Saved draft"}</span>
+            <span class="state-pill">${escapeHtml(getSectionSummary(state, tab))}</span>
+            ${validationError ? `<span class="state-pill warning-pill">${escapeHtml(validationError)}</span>` : ""}
+          </div>
+          ${renderDetailContent(state, tab)}
         </div>
-        <div class="detail-toolbar">
-          <button type="button" class="secondary-btn" data-action="load-saved">Load Saved Settings</button>
-          <button type="button" class="secondary-btn" data-action="export-settings">Export Settings</button>
-          <button type="button" class="secondary-btn" data-action="restore-defaults">Restore Defaults</button>
-          <button type="button" class="primary-btn" data-action="save-settings" ${validationError ? "disabled" : ""}>Save Settings</button>
-        </div>
-        <div class="detail-meta">
-          <span class="state-pill">${dirty ? "Unsaved changes" : "Saved draft"}</span>
-          <span class="state-pill">${escapeHtml(getSectionSummary(state, tab))}</span>
-          ${validationError ? `<span class="state-pill warning-pill">${escapeHtml(validationError)}</span>` : ""}
-        </div>
-        ${renderDetailContent(state, tab)}
       </section>
     </div>
   `;
@@ -823,7 +834,9 @@ function renderDetail(state: SettingsWorkspaceState, tab: SettingsTabKey): strin
 
 function renderWorkspace(state: SettingsWorkspaceState): string {
   normalizeSelection(state);
-  return state.currentView === "index" ? renderIndex(state) : renderDetail(state, state.currentView);
+  return state.currentView === "index"
+    ? renderIndex(state)
+    : renderDetail(state, state.currentView);
 }
 
 export function initSettingsWorkspace(options: SettingsWorkspaceOptions): void {
