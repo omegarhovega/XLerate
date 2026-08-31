@@ -41,6 +41,8 @@ Users can edit and save their own presets for:
 - Loads only direct relationships initially; deeper branches load when expanded.
 - Small branches may be prefetched for instant expansion, while large referenced
   ranges stay summarized and can be opened in bounded pages.
+- A1-style cells, ranges, and sheet-qualified references shown inside formulas
+  are clickable and navigate Excel without closing the trace dialog.
 - Can inspect multiple dependency levels without scanning unrelated worksheets.
 - Best used on formula cells where you want to understand what feeds a number or what depends on it.
 

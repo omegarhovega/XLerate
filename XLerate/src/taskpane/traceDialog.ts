@@ -8,6 +8,7 @@ import {
   toggleTraceNode,
   type TraceDialogState,
 } from "../core/traceDialogState";
+import { tokenizeFormulaReferences } from "../core/formulaReferences";
 import { isTraceNodeExpandable, type TraceNode } from "../core/traceGraph";
 import { parseParentToDialogMessage, type DialogToParentMessage } from "../core/traceProtocol";
 
@@ -51,14 +52,18 @@ function sendToParent(message: DialogToParentMessage): void {
 }
 
 function navigate(node: TraceNode): void {
+  navigateTarget(node.address);
+}
+
+function navigateTarget(address: string): void {
   sendToParent({
     action: "navigate",
     sessionId,
-    target: { address: node.address },
+    target: { address },
   });
 }
 
-function focusNode(nodeId: string, announce = true): void {
+function focusNode(nodeId: string, announce = true, moveDomFocus = true): void {
   const target = rowElementById.get(nodeId);
   if (!target) return;
 
@@ -70,12 +75,46 @@ function focusNode(nodeId: string, announce = true): void {
   target.classList.add(ROW_FOCUSED_CLASS);
   target.setAttribute("aria-selected", "true");
   currentFocusId = nodeId;
-  target.focus();
-  target.scrollIntoView({ block: "nearest" });
+  if (moveDomFocus) {
+    target.focus();
+    target.scrollIntoView({ block: "nearest" });
+  }
 
   if (announce) {
     const node = state.nodesById.get(nodeId);
     if (node) navigate(node);
+  }
+}
+
+function stopRowKeyboardForButton(button: HTMLButtonElement): void {
+  button.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+  });
+}
+
+function appendFormulaContent(formulaCell: HTMLTableCellElement, node: TraceNode): void {
+  if (node.kind === "range") {
+    formulaCell.textContent = "Range summary";
+    return;
+  }
+
+  for (const segment of tokenizeFormulaReferences(node.formula, node.worksheetName)) {
+    if (segment.kind === "text") {
+      formulaCell.appendChild(document.createTextNode(segment.text));
+      continue;
+    }
+    const reference = document.createElement("button");
+    reference.type = "button";
+    reference.className = "trace-formula-reference";
+    reference.textContent = segment.text;
+    reference.title = `Go to ${segment.target.address}`;
+    reference.setAttribute("aria-label", `Go to ${segment.target.address}`);
+    reference.addEventListener("click", (event) => {
+      event.stopPropagation();
+      navigateTarget(segment.target.address);
+    });
+    stopRowKeyboardForButton(reference);
+    formulaCell.appendChild(reference);
   }
 }
 
@@ -166,7 +205,8 @@ function createTreeRow(node: TraceNode): HTMLTableRowElement {
   valueCell.textContent =
     node.kind === "range" ? `${node.cellCount.toLocaleString()} cells` : node.value;
   const formulaCell = document.createElement("td");
-  formulaCell.textContent = node.kind === "range" ? "Range summary" : node.formula;
+  formulaCell.className = "trace-formula-cell";
+  appendFormulaContent(formulaCell, node);
 
   if (node.kind === "range") {
     const pageState = state.rangePages.get(node.id);
@@ -179,6 +219,7 @@ function createTreeRow(node: TraceNode): HTMLTableRowElement {
         event.stopPropagation();
         requestExpansion(node);
       });
+      stopRowKeyboardForButton(loadMore);
       formulaCell.append(" ", loadMore);
     }
   }
@@ -311,7 +352,9 @@ function handleDialogFocusIn(event: FocusEvent): void {
   const row = target.closest(`tr[${ROW_ID_ATTR}]`);
   if (!(row instanceof HTMLTableRowElement)) return;
   const nodeId = row.getAttribute(ROW_ID_ATTR);
-  if (nodeId && currentFocusId !== nodeId) focusNode(nodeId, false);
+  if (nodeId && currentFocusId !== nodeId) {
+    focusNode(nodeId, false, target.closest("button") === null);
+  }
 }
 
 function handleParentMessage(arg: { message?: string } | { error: number }): void {

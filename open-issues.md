@@ -20,6 +20,9 @@ the current branch. It should describe repo reality, not ideal future state.
   areas before cell materialization, caches loaded branches, coalesces live
   navigation, and cancels queued work when the dialog closes or is replaced.
 
+- Trace formulas now expose clickable local and sheet-qualified A1 cells/ranges,
+  including absolute references, quoted worksheet names, and escaped apostrophes.
+
 - `manifest.xml` now declares the desktop/runtime floor in the base manifest,
   so unsupported hosts are filtered out before installation.
 

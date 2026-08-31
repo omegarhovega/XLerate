@@ -301,6 +301,19 @@ when expanded. All Excel work is serialized through one priority scheduler.
       ExcelApiDesktop 1.1, keyboard focus returns to the grid and the last
       navigated cell remains selected.
 
+**Clickable formula references:**
+
+- [ ] Trace a formula containing local cells, absolute cells, ranges, a quoted
+      worksheet name, and an apostrophe-escaped worksheet name. Each supported
+      A1 token is underlined and clickable in the Formula column.
+- [ ] Click a formula reference. Excel selects that exact cell/range while the
+      trace dialog stays open; the row itself does not fire a second navigation.
+- [ ] Tab to a formula reference and press Enter. Navigation fires and the
+      dialog remains open.
+- [ ] A reference-looking token inside an Excel string literal (for example
+      `="A1"`) remains plain text. Named ranges, table structured references,
+      3D references, and external workbook links are also plain text in v1.
+
 **Undo semantics:**
 
 - [ ] Trace, expansion, paging, and live navigation add no XLerate workbook

@@ -11,5 +11,7 @@ Source logic: `src/modules/TraceUtils.bas`, `src/modules/RibbonCallbacks.bas`
 5. Circular references / repeated cells appear as non-expandable reference nodes.
 6. Rectangular areas above 50 cells appear as summarized ranges and load in pages of 100.
 7. Results show level, address, value, and formula for each discovered cell.
-8. If no direct references exist, output includes only the root cell.
-9. Selecting a result row jumps to and selects the referenced worksheet/range.
+8. Supported A1-style references inside displayed formulas are clickable; string
+   literals, names, structured references, 3D references, and external links remain text.
+9. If no direct references exist, output includes only the root cell.
+10. Selecting a result row jumps to and selects the referenced worksheet/range.
