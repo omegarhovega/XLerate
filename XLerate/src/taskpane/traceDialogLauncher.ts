@@ -1,77 +1,39 @@
 /* global Excel, Office */
 
-import { buildTrace, type TraceCellInfo, type TraceRow } from "../core/traceBuilder";
+import { TracePortLive, type TracePortMetric } from "../adapters/tracePortLive";
+import { buildTraceLoadingPolicy } from "../core/tracePolicy";
+import { parseDialogToParentMessage, type ParentToDialogMessage } from "../core/traceProtocol";
 import {
-  parseWorksheetScopedAddress,
   sanitizeTraceDepth,
   sanitizeTraceSafetyLimit,
   type TraceDirection,
 } from "../core/traceUtils";
-import {
-  getAllDirectTraceNeighbors,
-  resolveTraceStartCell,
-  snapshotRangeForTrace,
-} from "./traceExcelNeighbors";
+import { TraceRequestScheduler } from "../services/traceScheduler";
+import { TraceSessionService } from "../services/traceSession.service";
 
-/**
- * Shared dialog-opener used by both the taskpane (secondary entry
- * buttons) and the ribbon `Office.actions.associate` handlers in
- * `ribbonActions.ts`. With shared runtime enabled in the manifest,
- * both entry points live in the same taskpane JS context and share
- * this module's `activeDialog`; `openTraceDialog()` calls
- * `closeActiveDialog()` first so a second open from either entry
- * point closes the previous dialog cleanly.
- *
- * **Trace is computed HERE, in the parent runtime, not in the dialog.**
- * Office dialogs cannot call Excel.run (documented restriction:
- * https://learn.microsoft.com/en-us/office/dev/add-ins/develop/dialog-api-in-office-add-ins).
- * The rows are pushed to the dialog via `dialog.messageChild` once the
- * dialog signals it has registered its parent-message handler.
- */
+type PendingOpen = {
+  sessionId: string;
+  direction: TraceDirection;
+  maxDepth: number;
+  safetyLimit: number;
+};
 
 let activeDialog: Office.Dialog | null = null;
-/**
- * Stashed until the dialog signals "ready". The compute runs
- * serially after the ready signal. A prior version kicked off the
- * compute at t0 in parallel with displayDialogAsync; sideload timing
- * showed Excel's add-in runtime serializes concurrent API calls
- * during dialog spawn (a getActiveCell sync that was 2 ms in serial
- * mode became ~1 s when run during spawn), so the "parallel" path
- * gained no overlap and slightly regressed due to contention. See
- * the revert commit for the measured numbers.
- */
-type PendingCompute = { direction: TraceDirection; maxDepth: number; safetyLimit: number };
-let pendingCompute: PendingCompute | null = null;
-let activeDialogSessionId = 0;
+let activeDialogSessionId: string | null = null;
+let activeSession: TraceSessionService | null = null;
+let pendingOpen: PendingOpen | null = null;
+let sessionSequence = 0;
+const traceScheduler = new TraceRequestScheduler();
 
-// ---- Perf instrumentation (remove when diagnosis is done). ----
-// Logs boundary timestamps so we can identify which segment of the
-// open-trace-dialog flow dominates the perceived latency. Uses
-// Date.now() because the parent runtime and dialog window have
-// separate performance.now() origins; absolute epoch ms lets the
-// developer compute deltas across contexts by subtracting the "t0"
-// line. Grep `[trace-perf]` in DevTools to filter. Session tag is
-// printed once per flow so interleaved traces stay readable.
-let tracePerfSession = 0;
-function logTracePerf(label: string): void {
-  // eslint-disable-next-line no-console
-  console.log(`[trace-perf] session=${tracePerfSession} ${label} @ ${Date.now()}`);
+function isCurrentSession(dialog: Office.Dialog, sessionId: string): boolean {
+  return activeDialog === dialog && activeDialogSessionId === sessionId;
 }
 
-/**
- * Return keyboard focus to the Excel grid after dialog close.
- *
- * Excel now exposes `Workbook.focus()` on ExcelApiDesktop 1.1, which is
- * a host-level focus handoff rather than a DOM/webview blur heuristic.
- * We still activate/select the current cell so the right location is
- * visible, then call `workbook.focus()` when supported so keyboard
- * events go back to the grid.
- *
- * This must still run AFTER the browser has returned focus to the
- * taskpane iframe — if we run synchronously right after `dialog.close()`,
- * the browser's return happens later and overrides us. The caller defers
- * via `setTimeout` for this reason.
- */
+function logTraceMetric(sessionId: string, metric: TracePortMetric): void {
+  // eslint-disable-next-line no-console
+  console.log("[trace-metric]", { sessionId, ...metric });
+}
+
 async function pullFocusToGrid(): Promise<void> {
   try {
     await Excel.run(async (context) => {
@@ -86,21 +48,11 @@ async function pullFocusToGrid(): Promise<void> {
       }
       await context.sync();
     });
-  } catch (err) {
-    // Non-fatal: worst case, user presses one key/click to resume.
-    // eslint-disable-next-line no-console
-    console.log("[trace-focus] pullFocusToGrid error", err);
+  } catch {
+    // Focus return is best effort. The selected cell remains correct.
   }
 }
 
-/**
- * Schedule `pullFocusToGrid` after a short delay so the browser has
- * time to complete its own post-close focus return (which puts focus
- * on the taskpane iframe) BEFORE we try to pull it to the grid. The
- * `activeDialog !== null` guard at fire time skips the case where a
- * new dialog has opened in the meantime — we must never yank focus
- * off a live dialog.
- */
 function schedulePullFocusToGrid(): void {
   setTimeout(() => {
     if (activeDialog !== null) return;
@@ -108,282 +60,225 @@ function schedulePullFocusToGrid(): void {
   }, 50);
 }
 
+function disposeActiveSession(): void {
+  activeSession?.cancel();
+  traceScheduler.cancelAll();
+  activeSession = null;
+}
+
 function closeActiveDialog(): void {
+  disposeActiveSession();
+  pendingOpen = null;
   if (activeDialog) {
     try {
       activeDialog.close();
     } catch {
-      // Already closed; Office.js will null out our reference via the
-      // DialogEventReceived handler anyway.
+      // The dialog may already be closing through the host UI.
     }
     activeDialog = null;
-    pendingCompute = null;
+    activeDialogSessionId = null;
     schedulePullFocusToGrid();
   }
 }
 
-async function getActiveCellAddress(): Promise<string | null> {
-  try {
-    let address: string | null = null;
-    await Excel.run(async (context) => {
-      const cell = context.workbook.getActiveCell();
-      cell.load("address");
-      await context.sync();
-      address = cell.address;
-    });
-    return address;
-  } catch {
-    return null;
-  }
-}
-
-async function selectAddressInGrid(address: string): Promise<void> {
-  const parsed = parseWorksheetScopedAddress(address);
-  if (!parsed) return;
-  try {
-    await Excel.run(async (context) => {
-      const sheet = context.workbook.worksheets.getItemOrNullObject(parsed.worksheetName);
-      sheet.load("isNullObject");
-      await context.sync();
-      if (sheet.isNullObject) return;
-      const target = sheet.getRanges(parsed.rangeAddress);
-      target.select();
-      await context.sync();
-    });
-  } catch {
-    // Live-nav is fire-and-forget. Surfacing mid-navigation errors would
-    // fight user intent; next keystroke has another chance.
-  }
-}
-
-export type TraceProgress = {
-  rows: TraceRow[];
-  startAddress: string;
-  level: number;
-  isFinal: boolean;
-  truncated: boolean;
-};
-
-/**
- * Compute precedents or dependents starting at `startAddress` (or the
- * active cell if null). Runs Excel.run in the parent runtime; all
- * Office.js work stays out of the dialog per the API restriction.
- *
- * When `onProgress` is provided, the callback fires once per BFS
- * level — the first emission is the root alone (before any neighbor
- * lookup runs), each subsequent emission adds the next level's
- * newly discovered cells, and the final emission has `isFinal=true`.
- * The builder awaits each callback so consumers can `messageChild`
- * over IPC and the browser can paint before the next level's sync
- * starts. Without `onProgress`, behavior is identical to the prior
- * all-at-once return.
- */
-async function computeTrace(
-  direction: TraceDirection,
-  startAddress: string | null,
-  maxDepth: number,
-  safetyLimit: number,
-  onProgress?: (progress: TraceProgress) => void | Promise<void>
-): Promise<{ rows: TraceRow[]; startAddress: string; truncated: boolean }> {
-  const requires = Office.context.requirements.isSetSupported("ExcelApi", "1.12");
-  if (!requires) {
-    throw new Error("Trace requires ExcelApi 1.12 or later on this Excel host.");
-  }
-
-  let resolvedAddress = "";
-  let rows: TraceRow[] = [];
-  let truncated = false;
-
-  await Excel.run(async (context) => {
-    const rootRange = await resolveTraceStartCell(context, startAddress);
-    if (!rootRange) {
-      throw new Error("Could not resolve a starting cell for the trace.");
-    }
-    const root = snapshotRangeForTrace(rootRange);
-    resolvedAddress = root.address;
-
-    // Batched per-level neighbor lookup: one sync pair per BFS level
-    // regardless of breadth.
-    const getAllNeighbors = async (cells: TraceCellInfo[]): Promise<TraceCellInfo[][]> => {
-      const ranges = cells.map((info) => {
-        const worksheet = context.workbook.worksheets.getItem(info.worksheetName);
-        return worksheet.getRangeByIndexes(info.rowIndex, info.columnIndex, 1, 1);
-      });
-      const neighborLists = await getAllDirectTraceNeighbors(context, ranges, direction);
-      return neighborLists.map((list) => list.map(snapshotRangeForTrace));
-    };
-
-    const result = await buildTrace({
-      root,
-      maxDepth,
-      maxRows: safetyLimit,
-      getAllNeighbors,
-      onProgress: onProgress
-        ? async (p) => {
-            await onProgress({
-              rows: p.rows,
-              startAddress: resolvedAddress,
-              level: p.level,
-              isFinal: p.isFinal,
-              truncated: p.truncated,
-            });
-          }
-        : undefined,
-    });
-    rows = result.rows;
-    truncated = result.truncated;
-  });
-
-  return { rows, startAddress: resolvedAddress, truncated };
-}
-
-type DialogToParent =
-  | { action: "ready" }
-  | { action: "navigate"; address: string }
-  | { action: "close" };
-
-function parseDialogMessage(raw: unknown): DialogToParent | null {
-  if (typeof raw !== "string") return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (!parsed || typeof parsed !== "object") return null;
-  const obj = parsed as { action?: unknown; address?: unknown };
-  if (obj.action === "ready") return { action: "ready" };
-  if (obj.action === "navigate" && typeof obj.address === "string" && obj.address.length > 0) {
-    return { action: "navigate", address: obj.address };
-  }
-  if (obj.action === "close") return { action: "close" };
-  return null;
-}
-
-async function computeAndPushRows(
-  request: PendingCompute,
+function sendToDialog(
   dialog: Office.Dialog,
-  dialogSessionId: number
-): Promise<void> {
+  sessionId: string,
+  message: ParentToDialogMessage
+): void {
+  if (!isCurrentSession(dialog, sessionId)) return;
   try {
-    logTracePerf("t4 compute.start");
-    const startAddress = await getActiveCellAddress();
-    logTracePerf("t4a compute.gotActiveCell");
-
-    // Stream each BFS level to the dialog as it completes. Level 0
-    // (just the root) lands before any neighbor lookup, so the user
-    // sees a filled dialog almost instantly. Subsequent levels paint
-    // in as Excel's precedent-graph compute reaches them.
-    let firstEmitLogged = false;
-    await computeTrace(
-      request.direction,
-      startAddress,
-      request.maxDepth,
-      request.safetyLimit,
-      async (progress) => {
-      if (!firstEmitLogged) {
-        logTracePerf(`t5a compute.firstEmit level=${progress.level} rows=${progress.rows.length}`);
-        firstEmitLogged = true;
-      }
-      if (progress.isFinal) {
-        logTracePerf(`t5 compute.end rows=${progress.rows.length} truncated=${progress.truncated}`);
-      }
-      if (activeDialog !== dialog || activeDialogSessionId !== dialogSessionId) return;
-      try {
-        dialog.messageChild(
-          JSON.stringify({
-            action: "setRows",
-            rows: progress.rows,
-            direction: request.direction,
-            startAddress: progress.startAddress,
-            truncated: progress.truncated,
-            isFinal: progress.isFinal,
-            level: progress.level,
-          })
-        );
-        if (progress.isFinal) logTracePerf("t6 messageChild.sent (final)");
-      } catch {
-        // Dialog already gone; skip rest of streaming.
-      }
-      }
-    );
-  } catch (error) {
-    if (activeDialog !== dialog || activeDialogSessionId !== dialogSessionId) return;
-    const message = error instanceof Error ? error.message : String(error);
-    try {
-      dialog.messageChild(JSON.stringify({ action: "error", message }));
-    } catch {
-      // Dialog already gone; nothing to report.
-    }
+    dialog.messageChild(JSON.stringify(message));
+  } catch {
+    // The dialog closed between the identity check and message send.
   }
+}
+
+function sendFailure(
+  dialog: Office.Dialog,
+  sessionId: string,
+  requestId: string,
+  nodeId: string,
+  error: unknown
+): void {
+  if (!isCurrentSession(dialog, sessionId)) return;
+  const message = error instanceof Error ? error.message : String(error);
+  sendToDialog(dialog, sessionId, {
+    action: "nodeFailed",
+    sessionId,
+    requestId,
+    nodeId,
+    message,
+  });
+}
+
+function assertDirectionSupported(direction: TraceDirection): void {
+  const minimumVersion = direction === "dependents" ? "1.13" : "1.12";
+  if (!Office.context.requirements.isSetSupported("ExcelApi", minimumVersion)) {
+    throw new Error(
+      `Trace ${direction} requires ExcelApi ${minimumVersion} or later on this Excel host.`
+    );
+  }
+}
+
+function queuePrefetch(
+  dialog: Office.Dialog,
+  sessionId: string,
+  session: TraceSessionService,
+  scheduler: TraceRequestScheduler,
+  nodes: Parameters<TraceSessionService["getPrefetchCandidates"]>[0]
+): void {
+  let remainingPrefetchBudget = session.policy.prefetchMaxCells;
+  for (const candidate of session.getPrefetchCandidates(nodes)) {
+    void scheduler
+      .enqueue("prefetch", candidate.id, async () => {
+        if (
+          !isCurrentSession(dialog, sessionId) ||
+          session.isCancelled() ||
+          remainingPrefetchBudget <= 0
+        ) {
+          return;
+        }
+        const loaded = await session.prefetch(candidate.id, remainingPrefetchBudget);
+        remainingPrefetchBudget = Math.max(0, remainingPrefetchBudget - loaded);
+      })
+      .catch(() => undefined);
+  }
+}
+
+function startInitialLoad(request: PendingOpen, dialog: Office.Dialog): void {
+  try {
+    assertDirectionSupported(request.direction);
+  } catch (error) {
+    sendFailure(dialog, request.sessionId, "initial", "root", error);
+    return;
+  }
+
+  const port = new TracePortLive((metric) => logTraceMetric(request.sessionId, metric));
+  const policy = buildTraceLoadingPolicy({ safetyLimit: request.safetyLimit });
+  const session = new TraceSessionService(port, request.direction, policy, request.maxDepth);
+  activeSession = session;
+
+  void traceScheduler
+    .enqueue("initial", "root", async () => {
+      const result = await session.open();
+      if (!isCurrentSession(dialog, request.sessionId) || session.isCancelled()) return;
+      sendToDialog(dialog, request.sessionId, {
+        action: "rootLoaded",
+        sessionId: request.sessionId,
+        direction: request.direction,
+        root: result.root,
+        children: result.children,
+        truncated: result.truncated,
+        totalNodeCount: result.totalNodeCount,
+      });
+      queuePrefetch(dialog, request.sessionId, session, traceScheduler, result.children);
+    })
+    .catch((error) => sendFailure(dialog, request.sessionId, "initial", "root", error));
+}
+
+function handleExpand(
+  dialog: Office.Dialog,
+  sessionId: string,
+  requestId: string,
+  nodeId: string
+): void {
+  const session = activeSession;
+  if (!session) return;
+
+  void traceScheduler
+    .enqueue("expansion", nodeId, async () => {
+      const result = await session.expand(nodeId);
+      if (!isCurrentSession(dialog, sessionId) || session.isCancelled()) return;
+      sendToDialog(dialog, sessionId, {
+        action: "childrenLoaded",
+        sessionId,
+        requestId,
+        ...result,
+      });
+      queuePrefetch(dialog, sessionId, session, traceScheduler, result.children);
+    })
+    .catch((error) => sendFailure(dialog, sessionId, requestId, nodeId, error));
+}
+
+function handleRangePage(
+  dialog: Office.Dialog,
+  sessionId: string,
+  requestId: string,
+  nodeId: string,
+  page: number
+): void {
+  const session = activeSession;
+  if (!session) return;
+
+  void traceScheduler
+    .enqueue("expansion", `${nodeId}:page:${page}`, async () => {
+      const result = await session.loadRangePage(nodeId, page);
+      if (!isCurrentSession(dialog, sessionId) || session.isCancelled()) return;
+      sendToDialog(dialog, sessionId, {
+        action: "rangePageLoaded",
+        sessionId,
+        requestId,
+        ...result,
+      });
+    })
+    .catch((error) => sendFailure(dialog, sessionId, requestId, nodeId, error));
 }
 
 function handleDialogMessage(
   dialog: Office.Dialog,
-  dialogSessionId: number,
+  sessionId: string,
   arg: { message?: string; origin?: string | undefined } | { error: number }
 ): void {
   if (!("message" in arg) || typeof arg.message !== "string") return;
-  const parsed = parseDialogMessage(arg.message);
-  if (!parsed) return;
+  const message = parseDialogToParentMessage(arg.message);
+  if (!message || message.sessionId !== sessionId || !isCurrentSession(dialog, sessionId)) {
+    return;
+  }
 
-  if (activeDialog !== dialog || activeDialogSessionId !== dialogSessionId) return;
-
-  if (parsed.action === "ready") {
-    logTracePerf("t3 parent.readyReceived");
-    // Dialog has registered its parent-message handler; now run the BFS
-    // serially (concurrent Excel.run during spawn gets starved by
-    // Excel's internal queue, so there's no parallelism win).
-    if (activeDialog && pendingCompute) {
-      const request = pendingCompute;
-      pendingCompute = null;
-      void computeAndPushRows(request, dialog, dialogSessionId);
+  if (message.action === "ready") {
+    if (pendingOpen?.sessionId === sessionId) {
+      const request = pendingOpen;
+      pendingOpen = null;
+      startInitialLoad(request, dialog);
     }
     return;
   }
-
-  if (parsed.action === "navigate") {
-    void selectAddressInGrid(parsed.address);
+  if (message.action === "expand") {
+    handleExpand(dialog, sessionId, message.requestId, message.nodeId);
     return;
   }
-
-  if (parsed.action === "close") {
-    closeActiveDialog();
+  if (message.action === "loadRangePage") {
+    handleRangePage(dialog, sessionId, message.requestId, message.nodeId, message.page);
+    return;
   }
+  if (message.action === "navigate") {
+    const session = activeSession;
+    if (session) {
+      void traceScheduler
+        .enqueueNavigation(message.target.address, () => session.navigate(message.target))
+        .catch(() => undefined);
+    }
+    return;
+  }
+  closeActiveDialog();
 }
 
 export type OpenTraceDialogOptions = {
-  /** Clamp for BFS depth; sanitized via `sanitizeTraceDepth`. */
   maxDepth?: number;
-  /** Hard cap on total rendered rows; sanitized via `sanitizeTraceSafetyLimit`. */
   safetyLimit?: number;
-  /** Dialog height in percent of screen (1-100). Defaults to 30. */
   height?: number;
-  /** Dialog width in percent of screen (1-100). Defaults to 20. */
   width?: number;
 };
 
-/**
- * Open the trace dialog for the given direction. Returns as soon as
- * the dialog handle has been issued. The BFS runs serially after the
- * dialog signals `ready` — an earlier parallel-at-t0 design regressed
- * slightly because Excel's add-in runtime serializes concurrent API
- * calls during displayDialogAsync processing.
- *
- * The dialog cannot call `Excel.run` itself (documented restriction on
- * the Office Dialog API); all host-document work stays on this side of
- * the boundary.
- */
 export async function openTraceDialog(
   direction: TraceDirection,
   options: OpenTraceDialogOptions = {}
 ): Promise<void> {
-  const nextDialogSessionId = activeDialogSessionId + 1;
-  tracePerfSession = Date.now();
-  logTracePerf(`t0 click direction=${direction}`);
   closeActiveDialog();
-
-  pendingCompute = {
+  const sessionId = `trace-${Date.now()}-${++sessionSequence}`;
+  pendingOpen = {
+    sessionId,
     direction,
     maxDepth: sanitizeTraceDepth(options.maxDepth),
     safetyLimit: sanitizeTraceSafetyLimit(options.safetyLimit),
@@ -391,8 +286,7 @@ export async function openTraceDialog(
 
   const url = new URL("traceDialog.html", window.location.href);
   url.searchParams.set("direction", direction);
-  url.searchParams.set("perfSession", String(tracePerfSession));
-
+  url.searchParams.set("sessionId", sessionId);
   const height = typeof options.height === "number" ? options.height : 30;
   const width = typeof options.width === "number" ? options.width : 20;
 
@@ -402,28 +296,22 @@ export async function openTraceDialog(
       { height, width, displayInIframe: true },
       (result) => {
         if (result.status !== Office.AsyncResultStatus.Succeeded) {
-          pendingCompute = null;
+          pendingOpen = null;
           resolve();
           return;
         }
-        logTracePerf("t1 displayDialogAsync.callback");
-        const thisDialog = result.value;
-        activeDialog = thisDialog;
-        activeDialogSessionId = nextDialogSessionId;
-        thisDialog.addEventHandler(Office.EventType.DialogMessageReceived, (arg) =>
-          handleDialogMessage(thisDialog, nextDialogSessionId, arg)
+        const dialog = result.value;
+        activeDialog = dialog;
+        activeDialogSessionId = sessionId;
+        dialog.addEventHandler(Office.EventType.DialogMessageReceived, (arg) =>
+          handleDialogMessage(dialog, sessionId, arg)
         );
-        thisDialog.addEventHandler(Office.EventType.DialogEventReceived, () => {
-          // Cleanup path for user-initiated close (X button, system close).
-          // closeActiveDialog() handles both the ref-nulling and the focus
-          // pull for the Esc-via-messageParent path; this handler covers
-          // the case where the dialog closed without us asking.
-          // The identity guard skips the case where a newer openTraceDialog
-          // superseded this dialog — in that case closeActiveDialog has
-          // already run and reassigned activeDialog to the newer instance.
-          if (activeDialog !== thisDialog || activeDialogSessionId !== nextDialogSessionId) return;
+        dialog.addEventHandler(Office.EventType.DialogEventReceived, () => {
+          if (!isCurrentSession(dialog, sessionId)) return;
+          disposeActiveSession();
+          pendingOpen = null;
           activeDialog = null;
-          pendingCompute = null;
+          activeDialogSessionId = null;
           schedulePullFocusToGrid();
         });
         resolve();

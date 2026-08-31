@@ -6,8 +6,10 @@ Source logic: `src/modules/TraceUtils.bas`, `src/modules/RibbonCallbacks.bas`
 
 1. Trace starts from the active cell (root at level 0).
 2. User can run either precedents or dependents mode.
-3. Traversal is recursive up to configurable max depth.
-4. Circular references / repeated cells are skipped via visited-cell tracking.
-5. Results show level, address, value, and formula for each discovered cell.
-6. If no direct references exist, output includes only the root cell.
-7. Selecting a result row jumps to and selects the referenced worksheet/range.
+3. Initial load contains only the root and its direct relationships.
+4. Deeper relationships load when the user expands a node and are cached for the dialog session.
+5. Circular references / repeated cells appear as non-expandable reference nodes.
+6. Rectangular areas above 50 cells appear as summarized ranges and load in pages of 100.
+7. Results show level, address, value, and formula for each discovered cell.
+8. If no direct references exist, output includes only the root cell.
+9. Selecting a result row jumps to and selects the referenced worksheet/range.

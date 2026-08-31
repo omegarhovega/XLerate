@@ -37,9 +37,9 @@ design — the answer is almost always "extend the port."**
 
 **Pragmatic exception during migration:** `src/taskpane/` files use the
 Office.js globals (`Excel`, `Office`) directly for features that haven't
-been migrated through the port yet (`taskpane.ts`'s own `Excel.run` calls,
-`traceDialogLauncher.ts`, `traceExcelNeighbors.ts`, `traceDialog.ts`,
-and `ribbonActions.ts` — the ribbon ExecuteFunction handlers, which used
+  been migrated through the port yet (`taskpane.ts`'s own `Excel.run` calls,
+  `traceDialogLauncher.ts`'s focus-return helper, `traceDialog.ts`, and
+  `ribbonActions.ts` — the ribbon ExecuteFunction handlers, which used
 to live in `src/commands/commands.ts` before the shared-runtime
 migration). The dependency-cruiser rule restricts `office-js` *imports*
 to `adapters/`; globals-via-`/* global Excel, Office */` are not imports
@@ -307,37 +307,31 @@ when fired alongside a `displayDialogAsync` call.
 
 Implication: don't design perf optimizations around "let the dialog
 spawn while compute runs." There's no parallelism benefit. The
-`computeTrace` in `traceDialogLauncher.ts` runs serially after the
-dialog signals `ready`, and that's the correct shape — earlier
-parallel attempts only added contention overhead.
+  initial trace load in `traceDialogLauncher.ts` is queued only after the
+  dialog signals `ready`, and that's the correct shape — earlier parallel
+  attempts only added contention overhead. All subsequent navigation,
+  expansion, and prefetch work runs through the single-flight trace scheduler.
 
 If you find a future case where this appears to hold (e.g. on a newer
 Office host version), re-measure before committing — Microsoft could
 change this and the cost is model-dependent.
 
-### Progressive streaming for long operations — use `messageChild` per logical chunk
+### Demand-driven trace loading — send parent-specific deltas
 
-When an operation produces incremental results (e.g. BFS trace expanding
-one level at a time), push each chunk via `dialog.messageChild` as it
-completes rather than accumulating the full result before a single send.
-The dialog repaints between chunks and the user perceives the operation
-as fast even when total wall-clock time is the same.
+The default trace path loads only the root and its direct relationships.
+Expanding a node sends an `expand` request to the parent runtime, which
+returns a `childrenLoaded` delta for that parent. Large rectangular areas
+are returned as summarized range nodes and paged explicitly. Do not
+reintroduce cumulative `setRows` payloads or an eager full-graph BFS on
+open: both make hidden branches compete with keyboard navigation for
+Excel's serialized API queue.
 
-The builder's `onProgress` callback (see `core/traceBuilder.ts`) gets
-`await`ed per level so the browser has a chance to paint before the
-next level's Excel sync starts. Don't fire-and-forget the callback
-inside a tight loop — without the await, the updates queue up behind
-the compute and the user never sees intermediate states.
-
-### Diagnostic `[trace-perf]` logs are provisional
-
-Several `console.log("[trace-perf] …")` calls exist in
-`src/taskpane/traceDialog.ts` and `traceDialogLauncher.ts` — commit
-`944029c` introduced them to diagnose dialog-open latency; subsequent
-commits (`bb396c2`, `2eacc0f`) used them to validate changes. They're
-harmless in production but clutter the console. When a new perf issue
-isn't actively being diagnosed, remove them via a focused revert; they
-live behind a `logTracePerf` helper so the cleanup is localized.
+`core/traceBuilder.ts` remains the tested breadth-batched primitive for a
+future explicit Expand All/export path; it is not the default dialog loader.
+Trace navigation, expansion, and bounded prefetch must go through
+`services/traceScheduler.ts` so only one Excel operation is intentionally
+in flight. The live adapter emits compact `[trace-metric]` records with sync,
+area, node, and materialized-cell counts for sideload performance checks.
 
 ### Array-formula mutation is deferred
 

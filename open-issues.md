@@ -15,6 +15,11 @@ the current branch. It should describe repo reality, not ideal future state.
 
 ## Recently fixed
 
+- Trace loading is now demand-driven: the dialog loads the root and direct
+  relationships only, expands deeper nodes on request, summarizes large range
+  areas before cell materialization, caches loaded branches, coalesces live
+  navigation, and cancels queued work when the dialog closes or is replaced.
+
 - `manifest.xml` now declares the desktop/runtime floor in the base manifest,
   so unsupported hosts are filtered out before installation.
 

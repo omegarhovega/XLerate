@@ -16,7 +16,7 @@ export default [
   // correctly-written Excel.run() code (we do call load + sync in the right
   // order; the plugin just can't track navigation properties like range.worksheet).
   {
-    files: ["src/adapters/excelPortLive.ts"],
+    files: ["src/adapters/excelPortLive.ts", "src/adapters/tracePortLive.ts"],
     languageOptions: {
       globals: {
         Excel: "readonly",

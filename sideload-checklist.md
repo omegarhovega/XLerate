@@ -240,155 +240,71 @@ separate Office.js quirks. Work through **all** of these steps.
 
 ### Trace Precedents / Dependents (spec §3.1, §3.2)
 
-Not yet migrated through the harness (Phase 3+). If you do touch this:
+Trace now uses a range-aware adapter and a demand-driven dialog session.
+The root and direct relationships load initially; deeper branches load only
+when expanded. All Excel work is serialized through one priority scheduler.
 
-- [ ] Active cell has direct precedents → tree shows root + level 1 only.
-- [ ] Clicking a node jumps Excel's selection to that cell.
-- [ ] Active cell has no precedents → tree shows only the root.
+**Initial load and direct relationships:**
 
-**Keyboard navigation (Phase A of the trace-navigation plan):**
+- [ ] On a formula with cross-sheet precedents, click **Trace Precedents**.
+      The dialog shows the root and direct relationships only. No deeper rows
+      appear until a level-1 node is expanded.
+- [ ] Confirm `[trace-metric]` logs show one root operation followed by one
+      direct-neighbor operation. Adding unrelated worksheets does not change
+      those counts.
+- [ ] A constant or formula with no precedents shows only the root with a leaf
+      bullet and a plain-English status; no repeated `ItemNotFound` requests.
+- [ ] Trace Dependents uses the same initial shape across multiple worksheets.
+      On a host below ExcelApi 1.13 it reports the requirement instead of
+      attempting the unsupported API.
 
-- [ ] Run Trace Precedents against a cell with several known precedents.
-      Row 0 has a visible cyan ring (`.trace-row-focused`); other rows
-      do not. Hovering the tbody shows the aria-label tooltip with
-      shortcut guidance in browsers that surface it.
-- [ ] Click anywhere inside the taskpane (to give it document focus).
-      Press **ArrowDown** — ring moves to row 1. **ArrowDown** to the
-      last row; **ArrowDown** once more → ring stays on the last row
-      (no wrap).
-- [ ] **ArrowUp** past row 0 → ring stays on row 0 (no wrap).
-- [ ] **Home** jumps ring to row 0. **End** jumps to the last row.
-- [ ] **Enter** on the focused row → Excel scrolls to and selects that
-      cell. The ring stays on the same row in the taskpane, so
-      ArrowDown then Enter navigates cleanly down the chain.
-- [ ] **Esc** → ring disappears; subsequent arrow keys in the taskpane
-      do not bring it back until a new trace is run or a row is clicked.
-- [ ] Click a non-first row with the mouse. Ring moves to the clicked
-      row. Next **ArrowDown** advances from there, not from row 0.
-- [ ] Re-run Trace Precedents on a different active cell. Ring resets
-      to the new row 0.
-- [ ] Run a trace that returns zero results → tbody shows the "No
-      trace results." row; arrow keys do nothing; no error in the
-      taskpane status.
-- [ ] Sanity: Tab away from the taskpane and back. Tab order lands on
-      the focused row (thanks to tabindex=0), not on the inner link
-      button (which is tabindex=-1).
+**Lazy expansion, caching, and references:**
 
-### Trace Dialog (Phase B + Phase C of the trace-navigation plan)
+- [ ] Click or ArrowRight a collapsed formula node. It briefly shows a loading
+      indicator, then inserts only that node's direct children.
+- [ ] Collapse and re-expand the same node. Children appear immediately and no
+      new neighbor metric is emitted (session-cache hit).
+- [ ] Expand one branch in a graph with many siblings. Unopened sibling branches
+      remain unloaded and emit no neighbor metrics.
+- [ ] In a circular/shared dependency graph, repeated cells display as ↩
+      reference rows and cannot be expanded again.
+- [ ] A node at configured max depth becomes a leaf without another Excel query.
 
-The dialog renders the precedent/dependent graph as an interactive tree,
-streams rows in per BFS level as they arrive, and supports keyboard-first
-navigation with live selection-following in the grid.
+**Large rectangular precedents:**
 
-Primary flow — opening:
+- [ ] Trace a formula such as `=SUM(Detail!A1:A10000)`. The direct result is one
+      range-summary row showing 10,000 cells; logs report zero materialized
+      cells for that area.
+- [ ] Expand the summary. The first 100 cells appear, followed by **Load more**.
+      Each click adds at most 100 cells and preserves focus. The corresponding
+      `[trace-metric]` entry reports one rectangular area for a single-column
+      page (and never more than three areas for a row-major multi-column page),
+      rather than one Office.js proxy per cell.
+- [ ] A rectangular area of exactly 50 cells expands as individual cells; an
+      area of 51 cells is summarized.
+- [ ] Lower the safety limit and confirm truncation occurs before additional
+      cell proxies/pages are created.
 
-- [ ] The **XLerate** tab appears on the Excel ribbon (replaces the
-      single Home-tab group from earlier builds). Opening the tab shows
-      four groups in order: **Formulas**, **Auditing**, **Formatting**,
-      **Settings**. (See the "Ribbon tab" section below for full
-      per-button verification.)
-- [ ] On a cell with precedents, click XLerate tab → Formulas group →
-      **Trace Precedents**.
-      Dialog opens center-screen. Excel's active cell is unchanged
-      from before the click.
-- [ ] Dialog shows "Loading…" briefly (≤ ~1 s on a warm bundle),
-      then the root row appears with a ▼ chevron, its direct
-      precedents (level 1) visible below it with either ▶ (collapsed
-      parent) or a greyed leaf bullet (no own precedents).
-- [ ] Status line during streaming reads
-      `Trace precedents on <addr>: loading… N cells so far (depth K)`;
-      changes to
-      `Trace precedents on <addr>: N cells.`
-      when the BFS completes.
-- [ ] Row 0 (root) has the cyan focus ring. Deeper levels in `allRows`
-      are present but collapsed by default — you can see there's more
-      to explore from the ▶ chevrons but not the content.
+**Keyboard, priority, and cancellation:**
 
-Tree interaction — mouse:
+- [ ] ArrowDown/ArrowUp navigate visible rows only; Home/End jump to the ends;
+      ArrowRight expands or enters a subtree; ArrowLeft collapses or moves to
+      the parent. Grid selection follows deliberate focus moves.
+- [ ] Hold ArrowDown across a large visible page. Navigation stays responsive
+      and Excel eventually selects the latest row rather than replaying every
+      obsolete intermediate selection.
+- [ ] Trigger an expansion while idle prefetch is queued. The explicit expansion
+      runs first after the current Office.js boundary.
+- [ ] Close the dialog during a load, then immediately open another trace. The
+      old session sends no rows into the new dialog and performs no later levels.
+- [ ] Enter or Escape closes the dialog. On Excel Desktop with
+      ExcelApiDesktop 1.1, keyboard focus returns to the grid and the last
+      navigated cell remains selected.
 
-- [ ] Click a ▶ chevron → that subtree expands, ▶ becomes ▼, children
-      slot in below their parent.
-- [ ] Click a ▼ chevron → subtree collapses.
-- [ ] Click anywhere on a row EXCEPT the chevron → Excel's active cell
-      jumps to that cell (live-nav). Focus ring moves to the clicked row.
-- [ ] Click the chevron while a descendant is focused, then collapse
-      → focus moves to the collapsing parent (focus can't be on a
-      now-hidden row); Excel's selection does NOT jump during the
-      collapse, only on the actual focus-change fallback.
+**Undo semantics:**
 
-Tree interaction — keyboard:
-
-- [ ] **ArrowDown / ArrowUp**: next / previous *visible* row. Collapsed
-      subtrees are skipped. Grid selection follows live.
-- [ ] **Home / End**: first / last visible row.
-- [ ] **ArrowRight** on a ▶ (collapsed parent) → **expand** in place.
-      Focus stays on the same row. Excel's selection does NOT change.
-- [ ] **ArrowRight** on a ▼ (expanded parent) → move focus to first
-      child. Live-nav fires; Excel follows.
-- [ ] **ArrowRight** on a leaf → no-op.
-- [ ] **ArrowLeft** on a ▼ (expanded parent) → **collapse** in place.
-      Focus stays. Excel's selection does NOT change.
-- [ ] **ArrowLeft** on a ▶ or a leaf → move focus to parent. Live-nav
-      fires.
-- [ ] **Enter** or **Escape** → close dialog.
-
-Progressive streaming:
-
-- [ ] Hold ArrowDown during a long trace's streaming phase. As deeper
-      levels arrive, they append under their expanded ancestors; rows
-      already above your focus position don't visibly shift; your
-      arrow navigation continues seamlessly.
-- [ ] Collapse a mid-depth subtree manually. While the trace is still
-      streaming in deeper levels below it, those additions should NOT
-      re-expand your collapsed subtree. The ▶ stays ▶.
-
-Focus-return-to-grid on close:
-
-- [ ] **Esc** closes. Excel's active cell is wherever the user last
-      navigated to (NOT reverted). Immediately press any arrow key on
-      the grid — if Excel's selection moves, `Workbook.focus()` handed
-      keyboard events back to the workbook successfully.
-- [ ] After the same close, try a non-arrow keyboard gesture such as
-      typing a digit or using **Ctrl+Arrow**. On supported Desktop hosts,
-      the workbook should behave as if the sheet retained focus, not
-      merely as if the selection moved.
-- [ ] If focus does NOT return on a host that lacks `ExcelApiDesktop 1.1`
-      support, document it as a known limitation. The current supported
-      fix is Desktop-only because `Workbook.focus()` is Desktop-only.
-
-Idempotency + re-entry:
-
-- [ ] With a dialog open, click the **Trace Precedents** ribbon button
-      again. The old dialog closes and a new one opens for the
-      (possibly updated) active cell. Expansion state resets to the
-      new trace's root.
-- [ ] Click **Trace Dependents** on a cell that only has precedents →
-      dialog opens with "1 cell" (just the root, leaf bullet). Arrow
-      keys don't do anything useful; Esc closes; no errors.
-- [ ] Click **Trace Precedents** on an empty cell with no formulas and
-      no precedents → same "1 cell" end state.
-
-Taskpane co-entry:
-
-- [ ] The taskpane **Trace Precedents (Dialog)** and **Trace Dependents
-      (Dialog)** buttons open the same dialog. Interchangeable with the
-      ribbon buttons. In shared runtime ribbon and taskpane share a
-      single `activeDialog` module variable; `openTraceDialog()` calls
-      `closeActiveDialog()` before displaying the new one, so opening
-      a second dialog from either entry point closes the first cleanly.
-
-Cross-interaction with the taskpane trace list (Phase A):
-
-- [ ] Run the taskpane **Trace Precedents (Active Cell)** button (flat
-      list with level numbers, Phase A). Then open the dialog via the
-      ribbon for the same cell. Dialog shows the same rows but as a
-      tree. Closing the dialog does not affect the taskpane list.
-
-Undo semantics:
-
-- [ ] After live-nav selections, press Ctrl+Z. XLerate has not added
-      any undo entries of its own (trace is read-only). Excel's own
-      selection history governs this; accept whatever it does.
+- [ ] Trace, expansion, paging, and live navigation add no XLerate workbook
+      mutation or undo entry.
 
 ---
 

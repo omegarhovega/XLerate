@@ -38,7 +38,10 @@ Users can edit and save their own presets for:
 - Starts from the active cell.
 - Opens a keyboard-friendly dialog for navigating relationships.
 - Can follow formula links across worksheets.
-- Can inspect multiple dependency levels, not just direct neighbors.
+- Loads only direct relationships initially; deeper branches load when expanded.
+- Small branches may be prefetched for instant expansion, while large referenced
+  ranges stay summarized and can be opened in bounded pages.
+- Can inspect multiple dependency levels without scanning unrelated worksheets.
 - Best used on formula cells where you want to understand what feeds a number or what depends on it.
 
 ### Switch Sign
